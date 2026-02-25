@@ -1,0 +1,14 @@
+# Takween/Baa Output
+بناء/
+المخرجات/
+build/
+*.exe
+*.o
+*.s
+*.ir
+
+# Temporary and IDE files
+.vscode/
+.vs/
+*.swp
+*.tmp
