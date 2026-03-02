@@ -1,10 +1,11 @@
-﻿#define MyAppName "Takween"
+﻿#define MyAppName "تكوين"
 #ifndef MyAppVersion
   #define MyAppVersion "0.1.0"
 #endif
 #define MyAppPublisher "Takween Project"
 #define MyAppURL "https://github.com/OmarAglan/Takween"
-#define MyAppExeName "takween.exe"
+#define MyAppExeName "تكوين.exe"
+#define MyAppLegacyExeName "takween.exe"
 
 [Setup]
 AppId={{9D321DC1-69B3-44F0-A52A-86DB6A6E0C97}
@@ -32,20 +33,21 @@ UninstallDisplayIcon={app}\bin\{#MyAppExeName}
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "addpath"; Description: "Add Takween to PATH"; GroupDescription: "Environment:"; Flags: checkedonce
+Name: "addpath"; Description: "Add تكوين to PATH"; GroupDescription: "Environment:"; Flags: checkedonce
 
 [Files]
-Source: "dist\bin\takween.exe"; DestDir: "{app}\bin"; Flags: ignoreversion
+Source: "dist\bin\{#MyAppExeName}"; DestDir: "{app}\bin"; Flags: ignoreversion
+Source: "dist\bin\{#MyAppLegacyExeName}"; DestDir: "{app}\bin"; Flags: ignoreversion
 Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "ROADMAP.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "مستندات\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "أمثلة\*"; DestDir: "{app}\examples"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\Takween CLI"; Filename: "{cmd}"; Parameters: "/K cd /d ""{app}\\bin"" && ""{app}\\bin\\takween.exe"" --help"; WorkingDir: "{app}\bin"
+Name: "{autoprograms}\تكوين CLI"; Filename: "{cmd}"; Parameters: "/K cd /d ""{app}\\bin"" && ""{app}\\bin\\{#MyAppExeName}"" --help"; WorkingDir: "{app}\bin"
 
 [Run]
-Filename: "{app}\bin\takween.exe"; Parameters: "--help"; Description: "Run Takween help"; Flags: postinstall skipifsilent unchecked
+Filename: "{app}\bin\{#MyAppExeName}"; Parameters: "--help"; Description: "Run تكوين help"; Flags: postinstall skipifsilent unchecked
 
 [Code]
 function IsOnPath(const Path, Paths: string): Boolean;
@@ -130,3 +132,4 @@ begin
     RegDeleteValue(HKCU, 'Environment', 'TAKWEEN_HOME');
   end;
 end;
+

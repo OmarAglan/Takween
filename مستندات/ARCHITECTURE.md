@@ -24,9 +24,9 @@ MVP الحالي مبني كخط أنابيب بسيط:
   - استدعاء parser قبل أوامر البناء/التشغيل.
 
 ## حدود المرحلة الحالية
-- parser لا يبني AST؛ فقط validation + readiness.
-- build pipeline الكامل مؤجل لـ Week 2.
-- clean/run حالياً في نطاق MVP التدرجي.
+- parser لا يبني AST مستقل؛ يبني نموذج تكوين صارم (Config Model) للاستخدام المباشر.
+- build pipeline الأساسي مفعل (parse -> build command -> compile/link).
+- `run` مفعل (build ثم execute) و`clean` يطبق فحوص أمان قبل الحذف.
 
 ## واجهة داخلية (Current Internal API)
 - `صحيح تحليل_ملف_تكوين(نص مسار).`

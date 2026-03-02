@@ -7,8 +7,8 @@
 ## الحالة الحالية (Current Status)
 - **آخر تحديث:** 2026-03-02
 - **اعتماد باء:** المتطلبات الأساسية لتكوين متاحة في Baa `v0.4.4.1`.
-- **اتجاه المشروع:** استبدال سير عمل `CMake/Make` لمشاريع Baa بواجهة أبسط (`takween ...`).
-- **وضع تكوين:** MVP قيد التنفيذ (تهيئة + parser صارم + build فعلي من `مشروع.تكوين` + مسار توزيع Windows عبر Inno Setup).
+- **اتجاه المشروع:** استبدال سير عمل `CMake/Make` لمشاريع Baa بواجهة أبسط (`تكوين ...`).
+- **وضع تكوين:** MVP قيد التنفيذ (تهيئة + parser صارم + build/run/clean فعلي من `مشروع.تكوين` + مسار توزيع Windows عبر Inno Setup).
 - **الاعتمادات:** لا توجد `stdlib` محلية داخل Takween؛ يتم الاعتماد على `baalib.baahd` من تثبيت Baa.
 
 ## لماذا تكوين؟
@@ -23,11 +23,11 @@
 3. تأكد بعد التثبيت:
 
 ```powershell
-takween --help
+تكوين --help
 baa --version
 ```
 
-> Takween يعتمد على وجود `baa.exe` في PATH.
+> تكوين يعتمد على وجود `baa.exe` في PATH.
 
 ## بناء المثبت (للمطورين)
 نستخدم **Inno Setup Compiler** لبناء مثبت ويندوز:
@@ -41,11 +41,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 
 ## أوامر CLI (MVP)
 ```powershell
-takween تهيئة    # init
-takween بناء     # build
-takween تشغيل    # run
-takween تنظيف    # clean
+تكوين تهيئة      # init
+تكوين بناء       # build
+تكوين تشغيل      # run
+تكوين تنظيف      # clean
 ```
+
+> يوجد alias متوافق: `takween`.
 
 ## مثال `مشروع.تكوين` (MVP)
 ```text

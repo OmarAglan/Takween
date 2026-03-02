@@ -23,7 +23,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 ```
 
 ## الناتج
-- `dist\bin\takween.exe`
+- `dist\bin\تكوين.exe` (primary)
+- `dist\bin\takween.exe` (alias)
 - `dist\installer\takween-setup-<version>.exe`
 
 ## سلوك المثبت

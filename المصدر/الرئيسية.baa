@@ -6,12 +6,13 @@
 }
 
 عدم اطبع_المساعدة() {
-    اطبع "Takween MVP CLI".
+    اطبع "تكوين (Takween) MVP CLI".
     اطبع "الاستخدام:".
-    اطبع "  takween تهيئة   | takween init".
-    اطبع "  takween بناء    | takween build".
-    اطبع "  takween تشغيل   | takween run".
-    اطبع "  takween تنظيف   | takween clean".
+    اطبع "  تكوين تهيئة    | تكوين init".
+    اطبع "  تكوين بناء     | تكوين build".
+    اطبع "  تكوين تشغيل    | تكوين run".
+    اطبع "  تكوين تنظيف    | تكوين clean".
+    اطبع "  (alias) takween ...".
 }
 
 صحيح الرئيسية(صحيح عدد، نص[] معاملات) {
