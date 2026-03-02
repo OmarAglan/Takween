@@ -1,4 +1,4 @@
-# Takween/Baa Output
+﻿# Takween/Baa Output
 بناء/
 المخرجات/
 build/
@@ -12,3 +12,6 @@ build/
 .vs/
 *.swp
 *.tmp
+
+# Local reference scratch (not part of Takween source of truth)
+Baa File/
