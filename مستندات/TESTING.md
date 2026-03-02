@@ -4,10 +4,10 @@
 ضمان ثبات سلوك MVP قبل التوسع في البناء الذكي ومدير الحزم.
 
 ## طبقات الاختبار
-1. **Parser Validation**
-2. **CLI Contract**
-3. **Init Side Effects**
-4. **Manual End-to-End Smoke**
+1. Parser Validation
+2. CLI Contract
+3. Init Side Effects
+4. Installer Smoke (Windows)
 
 ## حالات أساسية
 
@@ -28,12 +28,21 @@
 - إنشاء `مشروع.تكوين` قالب.
 - إنشاء `المصدر/الرئيسية.baa` قالب.
 
+### Installer (Inno Setup)
+- تشغيل المثبت بنجاح بدون صلاحيات Admin.
+- إضافة `{app}\bin` إلى PATH للمستخدم الحالي.
+- إنشاء `TAKWEEN_HOME`.
+- تنبيه المستخدم إذا `baa.exe` غير موجود في PATH.
+- إزالة PATH entry عند uninstall.
+
 ## سيناريو Smoke (يدوي)
-1. `takween تهيئة`
-2. تحقق من الملفات المتولدة.
-3. عدّل `مشروع.تكوين` بإدخال خطأ متعمد.
-4. نفّذ `takween build` وتأكد من فشل واضح.
-5. أصلح الخطأ وأعد `takween build`.
+1. شغّل `scripts\build_installer.ps1`.
+2. ثبّت النسخة الناتجة.
+3. افتح Terminal جديد ونفّذ:
+   - `takween --help`
+   - `baa --version`
+4. نفّذ `takween تهيئة` في مجلد فارغ.
+5. ألغ التثبيت وتأكد من إزالة مسار Takween من PATH.
 
 ## ملاحظة
 حتى إضافة runner رسمي داخل Takween، تعتمد الاختبارات على سيناريوهات يدوية موثقة.

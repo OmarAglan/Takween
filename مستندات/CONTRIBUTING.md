@@ -36,3 +36,8 @@
 ## الرسائل والإصدارات
 - استخدم رسائل commit مباشرة (مثال: `parser: enforce strict required keys`).
 - لا تجمع تغييرات كبيرة غير مترابطة في PR واحد.
+
+## البناء والتوزيع
+- بناء ثنائي Takween: scripts\\build_takween.ps1`r
+- بناء مثبت Inno Setup: scripts\\build_installer.ps1`r
+

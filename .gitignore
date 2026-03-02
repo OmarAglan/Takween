@@ -7,6 +7,9 @@ build/
 *.s
 *.ir
 
+# Distribution artifacts
+dist/
+
 # Temporary and IDE files
 .vscode/
 .vs/
