@@ -40,7 +40,6 @@ Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "ROADMAP.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "مستندات\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "أمثلة\*"; DestDir: "{app}\examples"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "stdlib\baalib.baahd"; DestDir: "{app}\stdlib"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\Takween CLI"; Filename: "{cmd}"; Parameters: "/K cd /d ""{app}\\bin"" && ""{app}\\bin\\takween.exe"" --help"; WorkingDir: "{app}\bin"

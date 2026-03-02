@@ -24,9 +24,9 @@
 - [x] Parser صارم للحقول
 
 ### Week 2 — `بناء/build` الأساسي
-- [ ] تحويل parser output إلى Build Plan
-- [ ] بناء أمر `baa` من `ملفات + التحسين + المخرج`
-- [ ] تنفيذ build فعلي مع تشخيص واضح
+- [x] تحويل parser output إلى Build Plan
+- [x] بناء أمر `baa` من `ملفات + التحسين + المخرج`
+- [x] تنفيذ build فعلي مع تشخيص واضح
 
 ### Week 3 — `تشغيل/run` + `تنظيف/clean`
 - [ ] `run`: build ثم execute

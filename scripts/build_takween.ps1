@@ -9,7 +9,6 @@ $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $distDir = Join-Path $root "dist"
 $binDir = Join-Path $distDir "bin"
 $tmpDir = Join-Path $distDir "_build_tmp"
-$tmpStdlibDir = Join-Path $tmpDir "stdlib"
 $outputExe = Join-Path $binDir "takween.exe"
 
 if (-not (Get-Command baa.exe -ErrorAction SilentlyContinue)) {
@@ -17,7 +16,7 @@ if (-not (Get-Command baa.exe -ErrorAction SilentlyContinue)) {
 }
 
 Remove-Item -Recurse -Force $tmpDir -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force $tmpStdlibDir | Out-Null
+New-Item -ItemType Directory -Force $tmpDir | Out-Null
 New-Item -ItemType Directory -Force $binDir | Out-Null
 
 $sourceMap = @{
@@ -39,12 +38,6 @@ foreach ($entry in $sourceMap.GetEnumerator()) {
     $content = $content.Replace('#تضمين "المصدر/تكوين.baahd"', '#تضمين "takween.baahd"')
     Set-Content -Encoding utf8 $dst $content
 }
-
-$stdlibHeader = Join-Path $root "stdlib\\baalib.baahd"
-if (-not (Test-Path $stdlibHeader)) {
-    throw "Missing stdlib header: $stdlibHeader"
-}
-Copy-Item $stdlibHeader (Join-Path $tmpStdlibDir "baalib.baahd") -Force
 
 Push-Location $tmpDir
 try {
