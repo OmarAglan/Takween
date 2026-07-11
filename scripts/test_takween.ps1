@@ -51,7 +51,7 @@ try {
     }
 
     & $buildScript -Version '0.1.0' -BaaPath $resolvedBaa -BaaStdlibPath $baaStdlib
-    $takween = Join-Path $root 'dist\bin\takween.exe'
+    $takween = Join-Path $root 'dist/bin/takween.exe'
     if (-not (Test-Path -LiteralPath $takween)) {
         throw "Takween executable was not produced: $takween"
     }
@@ -159,7 +159,7 @@ try {
 
     $v1Root = Join-Path $tempRoot 'v1-path-dependency'
     New-Item -ItemType Directory -Force $v1Root | Out-Null
-    Get-ChildItem -Force -LiteralPath (Join-Path $root 'tests\fixtures\v1_path_dependency') |
+    Get-ChildItem -Force -LiteralPath (Join-Path $root 'tests/fixtures/v1_path_dependency') |
         Copy-Item -Destination $v1Root -Recurse -Force
     Push-Location $v1Root
     try {
@@ -195,7 +195,7 @@ try {
 
     $invalidV1Root = Join-Path $tempRoot 'v1-invalid'
     New-Item -ItemType Directory -Force $invalidV1Root | Out-Null
-    Get-ChildItem -Force -LiteralPath (Join-Path $root 'tests\fixtures\v1_invalid_unknown_key') |
+    Get-ChildItem -Force -LiteralPath (Join-Path $root 'tests/fixtures/v1_invalid_unknown_key') |
         Copy-Item -Destination $invalidV1Root -Recurse -Force
     Push-Location $invalidV1Root
     try {
