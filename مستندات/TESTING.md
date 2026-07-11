@@ -10,6 +10,7 @@
 4. Clean Safety
 5. Init Side Effects
 6. Installer Smoke (Windows)
+7. Typed Manifest + Local Path Dependency
 
 ## حالات أساسية
 
@@ -32,6 +33,13 @@
 - `تكوين run` -> ينفّذ البناء أولاً ثم يشغّل الناتج.
 - إذا أعاد البرنامج الناتج كوداً غير صفري -> `تكوين run` يعيد نفس الكود.
 
+### `takween-manifest-v1`
+- القيم quoted/int/bool/string-array والأقسام المعروفة -> نجاح.
+- مفتاح/قسم/نوع قيمة مجهول -> فشل واضح.
+- هدف واحد + مصادر متعددة + include paths -> تدخل كلها خطة Baa.
+- اعتمادية `المسار` ذات بيان v1 -> تدخل مصادرها وتضميناتها خطة check/build/run.
+- output يحوي مسافة و`&` -> يبنى ويعمل وينظف دون تفسير shell.
+
 ### Clean Safety
 - `المخرج: بناء/` -> يتم الحذف بنجاح.
 - `المخرج: .` -> رفض التنظيف.
@@ -53,14 +61,19 @@
 ## runner الآلي
 
 يشغل `scripts/test_takween.ps1` بناء تكوين بمصرّف Baa محدد، ثم يتحقق من
-help/version وinit/check/build/rebuild/run/clean، وعقود JSON والكاش، ورفض manifest
-غير صالح والأعلام الحرة ومسار clean الخطر:
+help/version وinit/check/build/rebuild/run/clean، وعقود JSON والكاش، وحدود argv،
+وبيان v1 واعتمادية path، ورفض manifest غير صالح والأعلام الحرة ومسار clean الخطر:
 
 ```powershell
 .\scripts\test_takween.ps1 -BaaPath ..\Baa\build\presets\windows-verify\baa.exe
 ```
 
 لا يعد الاختبار ناجحا إذا استخدم Baa مختلفا بصمت؛ يطبع runner المسار والإصدار.
+
+الrunner يستخدم `IO.Path.PathSeparator` ولا يحتوي مسار تنفيذ Windows خاصا، لذا
+هو نفسه عقد Windows/Linux. إيصال 2026-07-11 الحالي ناجح على Windows. لم يمكن
+تشغيل إيصال Linux محليا لأن المضيف لا يملك WSL distribution ولا Docker/Podman
+ولا toolchain Linux؛ يجب تشغيل الأمر نفسه عبر `pwsh` على مضيف Linux قبل بوابة 0.2.
 
 ## سيناريو المثبت (يدوي)
 1. شغّل `scripts\build_installer.ps1`.
@@ -76,5 +89,5 @@ help/version وinit/check/build/rebuild/run/clean، وعقود JSON والكاش
 ## البوابات التالية
 
 - اختبارات parser بوحدات صغيرة بعد فصل النموذج عن globals.
-- تشغيل runner نفسه على Windows وLinux بعد إزالة `cmd /c`.
+- تشغيل runner نفسه على Linux وتسجيل الإيصال؛ إزالة `cmd /c` واختبار Windows مكتملان.
 - اختبار `test` وعقد reporter machine-readable موحد بعد إضافة هدف الاختبار.

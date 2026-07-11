@@ -43,7 +43,7 @@ if (-not $baaStdlib) {
 }
 
 try {
-    $env:PATH = "$baaDirectory;$oldPath"
+    $env:PATH = "$baaDirectory$([IO.Path]::PathSeparator)$oldPath"
     Write-Output "Testing with Baa: $resolvedBaa"
     & $resolvedBaa --version
     if ($LASTEXITCODE -ne 0) {
@@ -54,6 +54,15 @@ try {
     $takween = Join-Path $root 'dist\bin\takween.exe'
     if (-not (Test-Path -LiteralPath $takween)) {
         throw "Takween executable was not produced: $takween"
+    }
+
+    $executorSource = Get-ChildItem -LiteralPath $root -Directory |
+        ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -File -Filter '*.baa' } |
+        ForEach-Object { Get-Content -Raw -Encoding utf8 -LiteralPath $_.FullName } |
+        Out-String
+    $legacyExecute = -join [char[]](0x0646, 0x0641, 0x0630, 0x005F, 0x0623, 0x0645, 0x0631)
+    if ($executorSource -match 'cmd\s+/c' -or $executorSource.Contains($legacyExecute)) {
+        throw 'Takween executor regressed to shell command strings.'
     }
 
     $help = Invoke-ExpectedSuccess $takween @('--help') 'help contract'
@@ -106,6 +115,27 @@ try {
         Invoke-ExpectedSuccess $takween @('clean') 'clean workflow' | Out-Null
         if (Test-Path -LiteralPath $buildDirectory) { throw 'clean did not remove the build directory.' }
 
+        $manifestLines = @(Get-Content -Encoding utf8 -LiteralPath $manifestPath.FullName)
+        if ($manifestLines.Count -lt 5 -or $manifestLines[4] -notmatch ':') {
+            throw 'Generated manifest does not have the expected v0 field order.'
+        }
+        $originalOutputLine = $manifestLines[4]
+        $manifestLines[4] = ($manifestLines[4] -split ':', 2)[0] + ': build & safe space/'
+        Set-Content -Encoding utf8 -LiteralPath $manifestPath.FullName -Value $manifestLines
+        Invoke-ExpectedSuccess $takween @('build') 'structured metacharacter path build' | Out-Null
+        $structuredDirectory = Join-Path $tempRoot 'build & safe space'
+        if (-not (Test-Path -LiteralPath $structuredDirectory)) {
+            throw 'Structured argv build did not preserve the metacharacter output path.'
+        }
+        Invoke-ExpectedSuccess $takween @('run') 'structured metacharacter path run' | Out-Null
+        Invoke-ExpectedSuccess $takween @('clean') 'structured metacharacter path clean' | Out-Null
+        if (Test-Path -LiteralPath $structuredDirectory) {
+            throw 'Structured clean did not remove the metacharacter output path.'
+        }
+
+        $manifestLines[4] = $originalOutputLine
+        Set-Content -Encoding utf8 -LiteralPath $manifestPath.FullName -Value $manifestLines
+
         Add-Content -Encoding utf8 -LiteralPath $manifestPath.FullName -Value 'أعلام_إضافية: & whoami'
         Invoke-ExpectedFailure $takween @('build') 'free-form flag rejection' | Out-Null
         $manifestLines = @(Get-Content -Encoding utf8 -LiteralPath $manifestPath.FullName)
@@ -123,6 +153,53 @@ try {
         $manifestLines[4] = ($manifestLines[4] -split ':', 2)[0] + ': .'
         Set-Content -Encoding utf8 -LiteralPath $manifestPath.FullName -Value $manifestLines
         Invoke-ExpectedFailure $takween @('clean') 'unsafe-clean rejection' | Out-Null
+    } finally {
+        Pop-Location
+    }
+
+    $v1Root = Join-Path $tempRoot 'v1-path-dependency'
+    New-Item -ItemType Directory -Force $v1Root | Out-Null
+    Get-ChildItem -Force -LiteralPath (Join-Path $root 'tests\fixtures\v1_path_dependency') |
+        Copy-Item -Destination $v1Root -Recurse -Force
+    Push-Location $v1Root
+    try {
+        $v1Check = Invoke-ExpectedSuccess $takween @('check') 'v1 typed check workflow'
+        $v1CheckData = $v1Check | ConvertFrom-Json
+        if ($v1CheckData.schema_version -ne 'diagnostics-json-v1' -or
+            @($v1CheckData.diagnostics).Count -ne 0) {
+            throw 'v1 typed check did not preserve the diagnostics contract.'
+        }
+
+        Invoke-ExpectedSuccess $takween @('build') 'v1 typed path dependency build' | Out-Null
+        $v1BuildDirectory = Join-Path $v1Root 'build & typed safe'
+        $v1BuildManifest = Join-Path $v1BuildDirectory 'build-manifest.json'
+        if (-not (Test-Path -LiteralPath $v1BuildManifest)) {
+            throw 'v1 build did not emit a build manifest in the typed output path.'
+        }
+        $v1BuildData = Get-Content -Raw -Encoding utf8 -LiteralPath $v1BuildManifest | ConvertFrom-Json
+        if (@($v1BuildData.units).Count -lt 3) {
+            throw 'v1 path dependency sources were not included in the compiler build plan.'
+        }
+
+        $v1Run = Invoke-ExpectedSuccess $takween @('run') 'v1 typed path dependency run'
+        if ($v1Run -notmatch 'typed path dependency ok') {
+            throw 'v1 path dependency executable did not run the dependency-backed behavior.'
+        }
+        Invoke-ExpectedSuccess $takween @('clean') 'v1 typed clean' | Out-Null
+        if (Test-Path -LiteralPath $v1BuildDirectory) {
+            throw 'v1 typed clean did not remove the configured output tree.'
+        }
+    } finally {
+        Pop-Location
+    }
+
+    $invalidV1Root = Join-Path $tempRoot 'v1-invalid'
+    New-Item -ItemType Directory -Force $invalidV1Root | Out-Null
+    Get-ChildItem -Force -LiteralPath (Join-Path $root 'tests\fixtures\v1_invalid_unknown_key') |
+        Copy-Item -Destination $invalidV1Root -Recurse -Force
+    Push-Location $invalidV1Root
+    try {
+        Invoke-ExpectedFailure $takween @('check') 'v1 unknown-key rejection' | Out-Null
     } finally {
         Pop-Location
     }
