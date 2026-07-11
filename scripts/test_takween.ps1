@@ -73,14 +73,44 @@ try {
         if (-not $manifestPath) { throw 'init did not create a project manifest.' }
         if (-not $sourcePath) { throw 'init did not create the main source.' }
 
+        $check = Invoke-ExpectedSuccess $takween @('check') 'check workflow'
+        $checkData = $check | ConvertFrom-Json
+        if ($checkData.schema_version -ne 'diagnostics-json-v1') {
+            throw 'check did not forward the diagnostics-json-v1 contract.'
+        }
+        if (@($checkData.diagnostics).Count -ne 0) {
+            throw 'check reported diagnostics for the generated valid project.'
+        }
+
         Invoke-ExpectedSuccess $takween @('build') 'build workflow' | Out-Null
         $builtExe = Get-ChildItem -LiteralPath $tempRoot -Recurse -File -Filter '*.exe' | Select-Object -First 1
         if (-not $builtExe) { throw 'build did not create an executable.' }
         $buildDirectory = $builtExe.Directory.FullName
+        $buildManifest = Join-Path $buildDirectory 'build-manifest.json'
+        if (-not (Test-Path -LiteralPath $buildManifest)) {
+            throw 'build did not emit build-manifest.json.'
+        }
+        $firstBuildData = Get-Content -Raw -Encoding utf8 -LiteralPath $buildManifest | ConvertFrom-Json
+        if ($firstBuildData.schema -ne 1 -or -not $firstBuildData.incremental) {
+            throw 'build manifest does not expose schema 1 incremental state.'
+        }
+
+        Invoke-ExpectedSuccess $takween @('build') 'incremental rebuild workflow' | Out-Null
+        $secondBuildData = Get-Content -Raw -Encoding utf8 -LiteralPath $buildManifest | ConvertFrom-Json
+        $cacheHits = @($secondBuildData.units | Where-Object { $_.cache.hit })
+        if ($cacheHits.Count -lt 1) {
+            throw 'incremental rebuild did not report a cache hit.'
+        }
 
         Invoke-ExpectedSuccess $takween @('run') 'run workflow' | Out-Null
         Invoke-ExpectedSuccess $takween @('clean') 'clean workflow' | Out-Null
         if (Test-Path -LiteralPath $buildDirectory) { throw 'clean did not remove the build directory.' }
+
+        Add-Content -Encoding utf8 -LiteralPath $manifestPath.FullName -Value 'أعلام_إضافية: & whoami'
+        Invoke-ExpectedFailure $takween @('build') 'free-form flag rejection' | Out-Null
+        $manifestLines = @(Get-Content -Encoding utf8 -LiteralPath $manifestPath.FullName)
+        $manifestLines = @($manifestLines | Where-Object { $_ -notmatch '^أعلام_إضافية:' })
+        Set-Content -Encoding utf8 -LiteralPath $manifestPath.FullName -Value $manifestLines
 
         Add-Content -Encoding ascii -LiteralPath $manifestPath.FullName -Value 'unknown_key: value'
         Invoke-ExpectedFailure $takween @('build') 'unknown-key rejection' | Out-Null

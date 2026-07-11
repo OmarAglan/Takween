@@ -7,9 +7,9 @@
 ## الحالة الحالية (Current Status)
 - **آخر تحديث:** 2026-07-11
 - **إصدار تكوين:** `0.1.0`.
-- **خط أساس باء في مساحة Eco:** `0.6.0`؛ runner ‏init/build/run/clean يمر بهذا المصرّف.
+- **خط أساس باء في مساحة Eco:** `0.6.0`؛ runner ‏init/check/build/run/clean يمر بهذا المصرّف.
 - **اتجاه المشروع:** استبدال سير عمل `CMake/Make` لمشاريع Baa بواجهة أبسط (`تكوين ...`).
-- **وضع تكوين:** MVP قيد التنفيذ (تهيئة + parser صارم + build/run/clean فعلي من `مشروع.تكوين` + مسار توزيع Windows عبر Inno Setup).
+- **وضع تكوين:** MVP قيد التنفيذ (تهيئة + parser صارم + check/build/run/clean فعلي من `مشروع.تكوين` + بناء incremental وبيان schema 1 + مسار توزيع Windows عبر Inno Setup).
 - **الاعتمادات:** لا توجد `stdlib` محلية داخل Takween؛ يتم الاعتماد على `baalib.baahd` من تثبيت Baa.
 - **الحزم:** تصميم محلي/حتمي أولا؛ لا يوجد سجل حزم عام في 0.1.
 
@@ -50,6 +50,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 ## أوامر CLI (MVP)
 ```powershell
 تكوين تهيئة      # init
+تكوين فحص        # check, diagnostics-json-v1
 تكوين بناء       # build
 تكوين تشغيل      # run
 تكوين تنظيف      # clean
@@ -57,6 +58,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 ```
 
 > يوجد alias متوافق: `takween`.
+
+يبني `تكوين بناء` مباشرة إلى مجلد المخرجات، ويستخدم كاش Baa incremental تحت
+`المخرج/.takween-cache`، ويكتب `المخرج/build-manifest.json`. الحقول الحرة مثل
+`أعلام_إضافية` مرفوضة تنفيذيا حتى تستبدل بخيارات typed.
 
 ## مثال `مشروع.تكوين` (MVP)
 ```text

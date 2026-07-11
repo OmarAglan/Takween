@@ -25,7 +25,8 @@ MVP الحالي مبني كخط أنابيب بسيط:
 
 ## حدود المرحلة الحالية
 - parser لا يبني AST مستقل؛ يبني نموذج تكوين صارم (Config Model) للاستخدام المباشر.
-- build pipeline الأساسي مفعل (parse -> build command -> compile/link).
+- build pipeline الأساسي مفعل (parse -> validation -> Baa incremental build -> compile/link).
+- `check` يمرر عقد `diagnostics-json-v1`، وbuild يستهلك cache وبيان schema 1.
 - `run` مفعل (build ثم execute) و`clean` يطبق فحوص أمان قبل الحذف.
 - executor الحالي خاص بويندوز ويبني أوامر `cmd /c` نصية؛ هذا قيد معروف وليس
   عقدا دائما. الانتقال التالي يحتاج Process API مهيكلة في Baa تستقبل argv وcwd.
@@ -46,6 +47,7 @@ MVP الحالي مبني كخط أنابيب بسيط:
 - `صحيح تحليل_ملف_تكوين(نص مسار).`
 - `صحيح تنفيذ_تهيئة().`
 - `صحيح تنفيذ_بناء().`
+- `صحيح تنفيذ_فحص().`
 - `صحيح تنفيذ_تشغيل().`
 - `صحيح تنفيذ_تنظيف().`
 

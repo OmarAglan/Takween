@@ -6,7 +6,7 @@
 ## طبقات الاختبار
 1. Parser Validation
 2. CLI Contract
-3. Build/Run Flow
+3. Check/Build/Run Flow
 4. Clean Safety
 5. Init Side Effects
 6. Installer Smoke (Windows)
@@ -26,7 +26,9 @@
 - أمر غير معروف -> كود خروج `2`.
 
 ### Build/Run
+- `تكوين check` -> `diagnostics-json-v1` صالح بلا تشخيصات لمشروع init.
 - `تكوين build` مع ملف صحيح -> نجاح + توليد ملف الناتج.
+- إعادة build -> `build-manifest.json` يسجل cache hit واحدا على الأقل.
 - `تكوين run` -> ينفّذ البناء أولاً ثم يشغّل الناتج.
 - إذا أعاد البرنامج الناتج كوداً غير صفري -> `تكوين run` يعيد نفس الكود.
 
@@ -51,7 +53,8 @@
 ## runner الآلي
 
 يشغل `scripts/test_takween.ps1` بناء تكوين بمصرّف Baa محدد، ثم يتحقق من
-help/version وinit/build/run/clean ورفض manifest غير صالح ومسار clean الخطر:
+help/version وinit/check/build/rebuild/run/clean، وعقود JSON والكاش، ورفض manifest
+غير صالح والأعلام الحرة ومسار clean الخطر:
 
 ```powershell
 .\scripts\test_takween.ps1 -BaaPath ..\Baa\build\presets\windows-verify\baa.exe
@@ -74,4 +77,4 @@ help/version وinit/build/run/clean ورفض manifest غير صالح ومسار
 
 - اختبارات parser بوحدات صغيرة بعد فصل النموذج عن globals.
 - تشغيل runner نفسه على Windows وLinux بعد إزالة `cmd /c`.
-- fixture يثبت تمرير `diagnostics-json-v1` وbuild manifest دون تحليل النص.
+- اختبار `test` وعقد reporter machine-readable موحد بعد إضافة هدف الاختبار.

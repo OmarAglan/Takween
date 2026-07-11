@@ -11,6 +11,8 @@
 - اختيار صريح لمسار Baa وstdlib في `build_takween.ps1`.
 - runner آلي لـ help/version/init/build/run/clean وحالات الرفض الأساسية.
 - تصميم `takween-manifest-v1` typed ومعمارية اعتماديات محلية أولا وملف قفل.
+- `فحص/check` بتمرير مباشر لعقد `diagnostics-json-v1`.
+- بناء incremental مع `.takween-cache` و`build-manifest.json` schema 1.
 
 ### تغيّر
 
@@ -19,6 +21,8 @@
 - جعل تضمين `تكوين.baahd` نسبيا إلى ملفات المصدر بدلا من الاعتماد على cwd.
 - إعادة ترتيب الخارطة: build system متعدد المنصات، ثم manifest/DAG، ثم
   اعتماديات محلية وقفل، ثم سجل عام مؤجل.
+- رفض المسارات ومحارف shell والأعلام الحرة قبل تركيب أمر Baa، وإزالة مسار
+  النسخ/الحذف المؤقت القديم من البناء.
 
 ## 0.1.0 - 2026-03-03
 
