@@ -48,7 +48,18 @@
 - تنبيه المستخدم إذا `baa.exe` غير موجود في PATH.
 - إزالة PATH entry عند uninstall.
 
-## سيناريو Smoke (يدوي)
+## runner الآلي
+
+يشغل `scripts/test_takween.ps1` بناء تكوين بمصرّف Baa محدد، ثم يتحقق من
+help/version وinit/build/run/clean ورفض manifest غير صالح ومسار clean الخطر:
+
+```powershell
+.\scripts\test_takween.ps1 -BaaPath ..\Baa\build\presets\windows-verify\baa.exe
+```
+
+لا يعد الاختبار ناجحا إذا استخدم Baa مختلفا بصمت؛ يطبع runner المسار والإصدار.
+
+## سيناريو المثبت (يدوي)
 1. شغّل `scripts\build_installer.ps1`.
 2. ثبّت النسخة الناتجة.
 3. افتح Terminal جديد ونفّذ:
@@ -59,5 +70,8 @@
 6. نفّذ `تكوين clean` وتحقق من حذف مخرجات البناء فقط.
 7. ألغ التثبيت وتأكد من إزالة مسار Takween من PATH.
 
-## ملاحظة
-حتى إضافة runner رسمي داخل Takween، تعتمد الاختبارات على سيناريوهات يدوية موثقة.
+## البوابات التالية
+
+- اختبارات parser بوحدات صغيرة بعد فصل النموذج عن globals.
+- تشغيل runner نفسه على Windows وLinux بعد إزالة `cmd /c`.
+- fixture يثبت تمرير `diagnostics-json-v1` وbuild manifest دون تحليل النص.

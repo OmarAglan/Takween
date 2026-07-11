@@ -27,6 +27,20 @@ MVP الحالي مبني كخط أنابيب بسيط:
 - parser لا يبني AST مستقل؛ يبني نموذج تكوين صارم (Config Model) للاستخدام المباشر.
 - build pipeline الأساسي مفعل (parse -> build command -> compile/link).
 - `run` مفعل (build ثم execute) و`clean` يطبق فحوص أمان قبل الحذف.
+- executor الحالي خاص بويندوز ويبني أوامر `cmd /c` نصية؛ هذا قيد معروف وليس
+  عقدا دائما. الانتقال التالي يحتاج Process API مهيكلة في Baa تستقبل argv وcwd.
+
+## المعمارية المستهدفة
+
+1. **Manifest Parser** يبني نموذجا typed بلا side effects.
+2. **Resolver** يحل الأهداف والاعتماديات وينتج lock graph حتميا.
+3. **Planner** يحول النموذج إلى DAG وخطوات Baa موصوفة.
+4. **Executor** يشغل argv مباشرة ويجمع stdout/stderr/exit code دون shell.
+5. **Reporter** يعرض العربية للبشر وJSON لـ Qalam وCI.
+6. **Cache** يستخدم build manifest وhash المحتوى ولا يخمن اعتماديات من النص.
+
+يجب أن تبقى هذه الطبقات قابلة للاختبار مستقلة؛ Qalam يستهلك CLI/JSON ولا يربط
+بنموذج parser الداخلي.
 
 ## واجهة داخلية (Current Internal API)
 - `صحيح تحليل_ملف_تكوين(نص مسار).`

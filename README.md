@@ -5,11 +5,13 @@
 > The Arabic-first build system for Baa.
 
 ## الحالة الحالية (Current Status)
-- **آخر تحديث:** 2026-03-02
-- **اعتماد باء:** المتطلبات الأساسية لتكوين متاحة في Baa `v0.4.4.1`.
+- **آخر تحديث:** 2026-07-11
+- **إصدار تكوين:** `0.1.0`.
+- **خط أساس باء في مساحة Eco:** `0.6.0`؛ runner ‏init/build/run/clean يمر بهذا المصرّف.
 - **اتجاه المشروع:** استبدال سير عمل `CMake/Make` لمشاريع Baa بواجهة أبسط (`تكوين ...`).
 - **وضع تكوين:** MVP قيد التنفيذ (تهيئة + parser صارم + build/run/clean فعلي من `مشروع.تكوين` + مسار توزيع Windows عبر Inno Setup).
 - **الاعتمادات:** لا توجد `stdlib` محلية داخل Takween؛ يتم الاعتماد على `baalib.baahd` من تثبيت Baa.
+- **الحزم:** تصميم محلي/حتمي أولا؛ لا يوجد سجل حزم عام في 0.1.
 
 ## لماذا تكوين؟
 - واجهة أوامر عربية مباشرة لمشاريع Baa.
@@ -36,6 +38,12 @@ baa --version
 powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 0.1.0
 ```
 
+لبناء binary مباشرة بمصرّف محدد وقابل لإعادة الإنتاج:
+
+```powershell
+.\scripts\build_takween.ps1 -Version 0.1.0 -BaaPath C:\path\to\baa.exe -BaaStdlibPath C:\path\to\stdlib
+```
+
 - الملف الناتج: `dist\installer\takween-setup-<version>.exe`
 - إذا كان `ISCC.exe` خارج المسار الافتراضي، مرره صراحة عبر `-IsccPath`.
 
@@ -45,6 +53,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 تكوين بناء       # build
 تكوين تشغيل      # run
 تكوين تنظيف      # clean
+تكوين --إصدار    # version
 ```
 
 > يوجد alias متوافق: `takween`.
@@ -68,6 +77,9 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 - [المساهمة](مستندات/CONTRIBUTING.md)
 - [الاختبارات](مستندات/TESTING.md)
 - [الإصدارات](مستندات/VERSIONING.md)
+- [سجل التغييرات](CHANGELOG.md)
+- [صيغة البيان v1 المخططة](مستندات/MANIFEST_V1.md)
+- [معمارية الحزم والقفل](مستندات/PACKAGES.md)
 - [دليل المثبت](مستندات/INSTALLER.md)
 
 ## الارتباط بمشروع Baa

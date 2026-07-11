@@ -1,5 +1,5 @@
 ﻿#تضمين "baalib.baahd"
-#تضمين "المصدر/تكوين.baahd"
+#تضمين "تكوين.baahd"
 
 // builtin formatted string helper (returns heap string)
 نص نسق(نص تنسيق_ثابت، ...).
