@@ -36,7 +36,7 @@
 ### `takween-manifest-v1`
 - القيم quoted/int/bool/string-array والأقسام المعروفة -> نجاح.
 - مفتاح/قسم/نوع قيمة مجهول -> فشل واضح.
-- هدف واحد + مصادر متعددة + include paths -> تدخل كلها خطة Baa.
+- أهداف متعددة + مصادر متعددة + include paths -> يختار الهدف المطلوب وتدخل ملفاته خطة Baa.
 - اعتمادية `المسار` ذات بيان v1 -> تدخل مصادرها وتضميناتها خطة check/build/run.
 - output يحوي مسافة و`&` -> يبنى ويعمل وينظف دون تفسير shell.
 
@@ -94,4 +94,5 @@ help/version وinit/check/build/rebuild/run/clean، وعقود JSON والكاش
   لاحقة التنفيذ التي أعلنها Baa للمضيف.
 - يشغل `.github/workflows/ci.yml` runner نفسه على `windows-latest` و`ubuntu-latest`
   بعد بناء Baa بتحذيرات تعامل كأخطاء.
-- اختبار `test` وعقد reporter machine-readable موحد بعد إضافة هدف الاختبار.
+- يغطي fixture متعدد الأهداف عقد `takween-targets-v1` واختيار build/run وهدف اختبار
+  واحد وتشغيل كل أهداف الاختبار ورفض الهدف المفقود ونوع المكتبة غير المدعوم.

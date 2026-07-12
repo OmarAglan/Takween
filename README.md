@@ -7,9 +7,12 @@
 ## الحالة الحالية (Current Status)
 - **آخر تحديث:** 2026-07-11
 - **إصدار تكوين:** `0.1.0`.
-- **خط أساس باء في مساحة Eco:** `0.6.0`؛ runner ‏init/check/build/run/clean وبيان v1 واعتمادية المسار يمر بهذا المصرّف على Windows.
+- **خط أساس باء في مساحة Eco:** `0.6.0`؛ runner ‏init/check/build/run/test/clean/targets
+  وبيان v1 واعتمادية المسار يمر بهذا المصرّف على Windows.
 - **اتجاه المشروع:** استبدال سير عمل `CMake/Make` لمشاريع Baa بواجهة أبسط (`تكوين ...`).
-- **وضع تكوين:** parser متوافق مع صيغة 0.1 ومع subset تنفيذي صارم من `takween-manifest-v1`، وcheck/build/run/clean يستخدم Process API مهيكلة من Baa بلا shell، مع بناء incremental واعتماديات مسار محلية واكتشاف هدف المضيف عبر `target-info-v1`.
+- **وضع تكوين:** parser متوافق مع صيغة 0.1 ومع `takween-manifest-v1` متعدد الأهداف؛
+  check/build/run/test/clean يستخدم Process API مهيكلة من Baa بلا shell، مع بناء
+  incremental واعتماديات مسار محلية واكتشاف هدف المضيف عبر `target-info-v1`.
 - **الاعتمادات:** لا توجد `stdlib` محلية داخل Takween؛ يتم الاعتماد على `baalib.baahd` من تثبيت Baa.
 - **الحزم:** تصميم محلي/حتمي أولا؛ لا يوجد سجل حزم عام في 0.1.
 
@@ -53,6 +56,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 تكوين فحص        # check, diagnostics-json-v1
 تكوين بناء       # build
 تكوين تشغيل      # run
+تكوين اختبار     # test: تشغيل كل أهداف الاختبار
+تكوين أهداف --json # targets: takween-targets-v1
 تكوين تنظيف      # clean
 تكوين --إصدار    # version
 ```
@@ -63,9 +68,11 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 `المخرج/.takween-cache`، ويكتب `المخرج/build-manifest.json`. الحقول الحرة مثل
 `أعلام_إضافية` مرفوضة تنفيذيا حتى تستبدل بخيارات typed.
 
-يُكتشف v1 عندما يبدأ أول سطر فعال بقسم `[ ... ]`. يدعم التنفيذ الحالي مشروعا
-وهدفا واحدا وبناء/نمطا typed واعتماديات `[الاعتماديات.<اسم>] المسار = "..."`
-المتعدية. تبقى الأهداف المتعددة وglobs وGit/registry وملف القفل مراحل لاحقة.
+يُكتشف v1 عندما يبدأ أول سطر فعال بقسم `[ ... ]`. يدعم التنفيذ الحالي عدة أهداف
+`تنفيذي/اختبار/مكتبة`، واختيار الهدف في build/check/run، وتشغيل هدف اختبار واحد أو
+كل أهداف الاختبار، وبناء/نمطا typed واعتماديات `[الاعتماديات.<اسم>] المسار = "..."`
+المتعدية. نوع المكتبة ظاهر في الفهرس لكنه غير قابل للبناء بعد؛ وتبقى globs وGit/registry
+وملف القفل مراحل لاحقة.
 
 ## مثال `مشروع.تكوين` (MVP)
 ```text

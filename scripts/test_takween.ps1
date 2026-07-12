@@ -227,6 +227,42 @@ try {
         Pop-Location
     }
 
+    $multiRoot = Join-Path $tempRoot 'v1-multi-target'
+    New-Item -ItemType Directory -Force $multiRoot | Out-Null
+    Get-ChildItem -Force -LiteralPath (Join-Path $root 'tests/fixtures/v1_multi_target') |
+        Copy-Item -Destination $multiRoot -Recurse -Force
+    Push-Location $multiRoot
+    try {
+        $targetJson = Invoke-ExpectedSuccess $takween @('targets', '--json') 'target status contract'
+        $targetData = $targetJson | ConvertFrom-Json
+        if ($targetData.schema_version -ne 'takween-targets-v1' -or @($targetData.targets).Count -ne 4) {
+            throw 'Multi-target status did not expose takween-targets-v1 with four targets.'
+        }
+        $tests = @($targetData.targets | Where-Object { $_.test -and $_.status -eq 'ready' })
+        $library = @($targetData.targets | Where-Object { $_.kind -eq 'library' })
+        if ($tests.Count -ne 2 -or $library.Count -ne 1 -or $library[0].buildable) {
+            throw 'Target status kinds/capabilities are inconsistent.'
+        }
+
+        Invoke-ExpectedSuccess $takween @('build', 'app') 'selected executable build' | Out-Null
+        $appRun = Invoke-ExpectedSuccess $takween @('run', 'app') 'selected executable run'
+        if ($appRun -notmatch 'multi target app ok') { throw 'Selected executable did not run.' }
+
+        $oneTest = Invoke-ExpectedSuccess $takween @('test', 'test_a') 'selected test target'
+        if ($oneTest -notmatch 'test target a ok' -or $oneTest -match 'test target b ok') {
+            throw 'Selected test command did not isolate the requested target.'
+        }
+        $allTests = Invoke-ExpectedSuccess $takween @('test') 'all test targets'
+        if ($allTests -notmatch 'test target a ok' -or $allTests -notmatch 'test target b ok') {
+            throw 'Test command did not run every test target.'
+        }
+        Invoke-ExpectedFailure $takween @('build', 'missing') 'missing target rejection' | Out-Null
+        Invoke-ExpectedFailure $takween @('build', 'helper') 'unsupported library target' | Out-Null
+        Invoke-ExpectedSuccess $takween @('clean') 'multi-target clean' | Out-Null
+    } finally {
+        Pop-Location
+    }
+
     Write-Output 'Takween smoke tests passed.'
     $global:LASTEXITCODE = 0
 } finally {
