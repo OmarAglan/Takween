@@ -1,6 +1,6 @@
 param(
     [string]$Version = "0.1.0",
-    [string]$BaaPath = "baa.exe",
+    [string]$BaaPath = "baa",
     [string]$BaaStdlibPath = ""
 )
 
@@ -9,15 +9,29 @@ $ErrorActionPreference = "Stop"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $distDir = Join-Path $root "dist"
 $binDir = Join-Path $distDir "bin"
-$outputExeLegacy = Join-Path $binDir "takween.exe"
 $arabicCommand = -join [char[]](0x062A, 0x0643, 0x0648, 0x064A, 0x0646)
-$outputExeArabic = Join-Path $binDir ($arabicCommand + ".exe")
 
 $resolvedBaa = Get-Command $BaaPath -ErrorAction SilentlyContinue
 if (-not $resolvedBaa) {
     throw "Baa compiler not found: $BaaPath"
 }
 $BaaPath = $resolvedBaa.Source
+
+$targetInfoText = & $BaaPath --target-info=json 2>&1 | Out-String
+if ($LASTEXITCODE -ne 0) {
+    throw "Selected Baa compiler does not provide target-info-v1.`n$targetInfoText"
+}
+$targetInfo = $targetInfoText | ConvertFrom-Json
+if ($targetInfo.schema_version -ne 'target-info-v1') {
+    throw "Selected Baa compiler returned an unsupported target discovery contract."
+}
+$hostTarget = @($targetInfo.targets | Where-Object { $_.name -eq $targetInfo.host_target })[0]
+if (-not $hostTarget -or -not $hostTarget.capabilities.link) {
+    throw "Selected Baa compiler cannot link its reported host target."
+}
+$executableSuffix = [string]$hostTarget.executable_suffix
+$outputExeLegacy = Join-Path $binDir ("takween" + $executableSuffix)
+$outputExeArabic = Join-Path $binDir ($arabicCommand + $executableSuffix)
 
 $sourceFiles = @(
     Get-ChildItem -LiteralPath $root -Directory |
@@ -26,8 +40,8 @@ $sourceFiles = @(
         Sort-Object Name |
         ForEach-Object { $_.FullName }
 )
-if ($sourceFiles.Count -ne 3) {
-    throw "Expected exactly three top-level Takween source files, found $($sourceFiles.Count)."
+if ($sourceFiles.Count -lt 5) {
+    throw "Expected at least five top-level Takween source files, found $($sourceFiles.Count)."
 }
 
 $versionSource = $sourceFiles |
@@ -48,7 +62,7 @@ try {
     Write-Output "Baa compiler: $BaaPath"
     & $BaaPath -I $root @sourceFiles -o $outputExeLegacy
     if ($LASTEXITCODE -ne 0) {
-        throw "Failed to build takween.exe (exit code $LASTEXITCODE)."
+        throw "Failed to build Takween (exit code $LASTEXITCODE)."
     }
 
     Copy-Item -Force $outputExeLegacy $outputExeArabic

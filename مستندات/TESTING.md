@@ -90,4 +90,8 @@ help/version وinit/check/build/rebuild/run/clean، وعقود JSON والكاش
 
 - اختبارات parser بوحدات صغيرة بعد فصل النموذج عن globals.
 - تشغيل runner نفسه على Linux وتسجيل الإيصال؛ إزالة `cmd /c` واختبار Windows مكتملان.
+- يتحقق runner من `target-info-v1` ومن أن اسم ناتج Takween وناتج المشروع يستخدمان
+  لاحقة التنفيذ التي أعلنها Baa للمضيف.
+- يشغل `.github/workflows/ci.yml` runner نفسه على `windows-latest` و`ubuntu-latest`
+  بعد بناء Baa بتحذيرات تعامل كأخطاء.
 - اختبار `test` وعقد reporter machine-readable موحد بعد إضافة هدف الاختبار.

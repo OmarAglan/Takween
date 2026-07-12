@@ -9,7 +9,7 @@
 - **إصدار تكوين:** `0.1.0`.
 - **خط أساس باء في مساحة Eco:** `0.6.0`؛ runner ‏init/check/build/run/clean وبيان v1 واعتمادية المسار يمر بهذا المصرّف على Windows.
 - **اتجاه المشروع:** استبدال سير عمل `CMake/Make` لمشاريع Baa بواجهة أبسط (`تكوين ...`).
-- **وضع تكوين:** parser متوافق مع صيغة 0.1 ومع subset تنفيذي صارم من `takween-manifest-v1`، وcheck/build/run/clean يستخدم Process API مهيكلة من Baa بلا shell، مع بناء incremental واعتماديات مسار محلية.
+- **وضع تكوين:** parser متوافق مع صيغة 0.1 ومع subset تنفيذي صارم من `takween-manifest-v1`، وcheck/build/run/clean يستخدم Process API مهيكلة من Baa بلا shell، مع بناء incremental واعتماديات مسار محلية واكتشاف هدف المضيف عبر `target-info-v1`.
 - **الاعتمادات:** لا توجد `stdlib` محلية داخل Takween؛ يتم الاعتماد على `baalib.baahd` من تثبيت Baa.
 - **الحزم:** تصميم محلي/حتمي أولا؛ لا يوجد سجل حزم عام في 0.1.
 
@@ -29,7 +29,7 @@
 baa --version
 ```
 
-> تكوين يعتمد على وجود `baa.exe` في PATH.
+> تكوين يعتمد على وجود `baa` في PATH وعلى عقد `--target-info=json` من Baa.
 
 ## بناء المثبت (للمطورين)
 نستخدم **Inno Setup Compiler** لبناء مثبت ويندوز:

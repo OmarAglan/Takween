@@ -50,8 +50,22 @@ try {
         throw "Unable to execute the selected Baa compiler."
     }
 
+    $targetInfoText = & $resolvedBaa --target-info=json 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0) {
+        throw "Baa target discovery failed.`n$targetInfoText"
+    }
+    $targetInfo = $targetInfoText | ConvertFrom-Json
+    if ($targetInfo.schema_version -ne 'target-info-v1') {
+        throw 'Baa target discovery did not return target-info-v1.'
+    }
+    $hostTarget = @($targetInfo.targets | Where-Object { $_.name -eq $targetInfo.host_target })[0]
+    if (-not $hostTarget -or -not $hostTarget.capabilities.link) {
+        throw 'Baa host target is missing or does not support linking.'
+    }
+    $hostSuffix = [string]$hostTarget.executable_suffix
+
     & $buildScript -Version '0.1.0' -BaaPath $resolvedBaa -BaaStdlibPath $baaStdlib
-    $takween = Join-Path $root 'dist/bin/takween.exe'
+    $takween = Join-Path $root ("dist/bin/takween" + $hostSuffix)
     if (-not (Test-Path -LiteralPath $takween)) {
         throw "Takween executable was not produced: $takween"
     }
@@ -92,12 +106,21 @@ try {
         }
 
         Invoke-ExpectedSuccess $takween @('build') 'build workflow' | Out-Null
-        $builtExe = Get-ChildItem -LiteralPath $tempRoot -Recurse -File -Filter '*.exe' | Select-Object -First 1
-        if (-not $builtExe) { throw 'build did not create an executable.' }
-        $buildDirectory = $builtExe.Directory.FullName
-        $buildManifest = Join-Path $buildDirectory 'build-manifest.json'
-        if (-not (Test-Path -LiteralPath $buildManifest)) {
+        $buildManifestItem = Get-ChildItem -LiteralPath $tempRoot -Recurse -File -Filter 'build-manifest.json' |
+            Select-Object -First 1
+        if (-not $buildManifestItem) {
             throw 'build did not emit build-manifest.json.'
+        }
+        $buildManifest = $buildManifestItem.FullName
+        $buildDirectory = $buildManifestItem.Directory.FullName
+        $builtExe = Get-ChildItem -LiteralPath $buildDirectory -File |
+            Where-Object { $_.Name -ne 'build-manifest.json' -and $_.Name.EndsWith($hostSuffix) } |
+            Select-Object -First 1
+        if (-not $builtExe) { throw 'build did not create an executable with the discovered host suffix.' }
+        $discoveryManifest = Join-Path $buildDirectory '.takween-cache/target-info.json'
+        $discoveryData = Get-Content -Raw -Encoding utf8 -LiteralPath $discoveryManifest | ConvertFrom-Json
+        if ($discoveryData.schema_version -ne 'target-info-v1') {
+            throw 'Takween did not cache the Baa target-info-v1 discovery document.'
         }
         $firstBuildData = Get-Content -Raw -Encoding utf8 -LiteralPath $buildManifest | ConvertFrom-Json
         if ($firstBuildData.schema -ne 1 -or -not $firstBuildData.incremental) {

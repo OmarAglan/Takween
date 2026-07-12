@@ -1,0 +1,56 @@
+name: Takween cross-platform smoke
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Check out Takween
+        uses: actions/checkout@v4
+        with:
+          path: Takween
+
+      - name: Check out Baa
+        uses: actions/checkout@v4
+        with:
+          repository: OmarAglan/Baa
+          ref: master
+          path: Baa
+
+      - name: Add Windows MinGW toolchain
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (Test-Path 'C:\msys64\ucrt64\bin') {
+              'C:\msys64\ucrt64\bin' | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          }
+
+      - name: Configure Baa on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: cmake -S Baa -B Baa/build-eco -G "MinGW Makefiles" -DBAA_WARNINGS_AS_ERRORS=ON
+
+      - name: Configure Baa on Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        run: cmake -S Baa -B Baa/build-eco -DCMAKE_BUILD_TYPE=Release -DBAA_WARNINGS_AS_ERRORS=ON
+
+      - name: Build Baa
+        run: cmake --build Baa/build-eco --parallel 2
+
+      - name: Run the shared Takween smoke suite
+        shell: pwsh
+        run: |
+          $suffix = if ($IsWindows) { '.exe' } else { '' }
+          $baa = Join-Path $env:GITHUB_WORKSPACE ("Baa/build-eco/baa" + $suffix)
+          ./Takween/scripts/test_takween.ps1 -BaaPath $baa
