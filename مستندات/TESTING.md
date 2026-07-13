@@ -83,9 +83,10 @@ help/version وinit/check/build/rebuild/run/clean، وعقود JSON والكاش
 
 الrunner يستخدم `IO.Path.PathSeparator` ولا يحتوي مسار تنفيذ Windows خاصا، لذا
 هو نفسه عقد Windows/Linux. إيصال GitHub Actions رقم
-[29251889635](https://github.com/OmarAglan/Takween/actions/runs/29251889635)
+[29258386560](https://github.com/OmarAglan/Takween/actions/runs/29258386560)
 بتاريخ 2026-07-13 شغّل الملف نفسه عبر `pwsh` ونجح على
-`windows-latest` و`ubuntu-latest`، بما في ذلك اعتماديات Git المثبتة والقفل الحتمي.
+`windows-latest` و`ubuntu-latest`، بما في ذلك اعتماديات Git المثبتة والقفل الحتمي
+وتمرير كل كود `compiler-cli-v1` من `1` إلى `5` عبر check/build/run/test.
 
 ## سيناريو المثبت (يدوي)
 1. شغّل `scripts\build_installer.ps1`.
