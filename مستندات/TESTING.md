@@ -24,7 +24,11 @@
 ### CLI
 - أمر عربي صحيح -> الدالة الصحيحة تُستدعى.
 - alias إنجليزي صحيح -> نفس السلوك.
+- عدم تمرير أمر -> كود خروج `2`.
 - أمر غير معروف -> كود خروج `2`.
+- هدف/نوع معروف غير مدعوم -> كود خروج `3`.
+- Baa مزيف يعيد كل كود من `1` إلى `5` -> تحافظ أوامر check/build/run/test على
+  الكود نفسه ولا تحوله إلى `1`.
 
 ### Build/Run
 - `تكوين check` -> `diagnostics-json-v1` صالح بلا تشخيصات لمشروع init.
@@ -68,7 +72,8 @@
 يشغل `scripts/test_takween.ps1` بناء تكوين بمصرّف Baa محدد، ثم يتحقق من
 help/version وinit/check/build/rebuild/run/clean، وعقود JSON والكاش، وحدود argv،
 وبيان v1 واعتماديات path/Git والقفل الحتمي، ورفض manifest غير صالح والأعلام الحرة
-ومسار clean الخطر:
+ومسار clean الخطر. كما يبني Baa مزيفا لكل كود `compiler-cli-v1` من `1` إلى `5`
+ويثبت مروره كما هو عبر check/build/run/test:
 
 ```powershell
 .\scripts\test_takween.ps1 -BaaPath ..\Baa\build\presets\windows-verify\baa.exe

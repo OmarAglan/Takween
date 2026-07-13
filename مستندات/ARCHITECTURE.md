@@ -36,6 +36,9 @@ MVP الحالي مبني كخط أنابيب بسيط:
 - `run` مفعل (build ثم execute) و`clean` يطبق فحوص أمان قبل الحذف.
 - executor لا يستخدم shell؛ build/check/run تمرر argv مباشرة، وinit/clean يستخدمان
   واجهات مجلدات UTF-8 المحمية من Baa. نموذج التنفيذ نفسه معد لـ Windows وLinux.
+- executor يحافظ على أكواد `compiler-cli-v1` من Baa (`1` إلى `5`) عبر
+  check/build/run/test، ويصنف أخطاء الاستدعاء والعملية المحلية بالأكواد نفسها دون
+  تحليل stdout أو stderr. بعد بناء ناجح يبقى كود البرنامج في run/test كود برنامج.
 - build يستهلك `target-info-v1` قبل إنشاء خطة المصرّف، ويتحقق من قدرة الربط ويستخدم
   `executable_suffix` المكتشفة بدلا من افتراض `.exe`.
 - v1 التنفيذي الحالي يفهرس عدة أهداف، ويختار build/check/run بالاسم، ويشغل هدف
@@ -47,7 +50,8 @@ MVP الحالي مبني كخط أنابيب بسيط:
 1. **Manifest Parser** يبني نموذجا typed بلا side effects.
 2. **Resolver** يحل path/Git الآن وينتج lock graph حتميا؛ يتوسع إلى SemVer/registry.
 3. **Planner** يحول النموذج إلى DAG وخطوات Baa موصوفة.
-4. **Executor** يشغل argv مباشرة ويجمع stdout/stderr/exit code دون shell.
+4. **Executor** يشغل argv مباشرة ويجمع stdout/stderr/exit code دون shell، ويحافظ
+   على أصل الكود ومرحلة العملية للمراسل.
 5. **Reporter** يعرض العربية للبشر وJSON لـ Qalam وCI.
 6. **Cache** يستخدم build manifest وhash المحتوى ولا يخمن اعتماديات من النص.
 

@@ -26,6 +26,8 @@
   في `.takween/packages/<commit>` مع تعطيل checkout hooks والبروتوكولات غير المعتمدة.
 - `takween-lock-v1` حتمي بـ UTF-8/LF للمشروع وهدف Baa وعقد path/Git المتعدية؛
   يغطي smoke ثبات البايتات وإعادة استخدام cache offline ورفض branch والمصدر المختلط.
+- أكواد خروج موحدة مع `compiler-cli-v1` (`0` إلى `5`) وتمرير كود Baa كما هو عبر
+  check/build/run/test، مع smoke مستقل لكل تصنيف على Windows وLinux.
 
 ### تغيّر
 

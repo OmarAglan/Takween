@@ -27,7 +27,7 @@
 - [x] `بناء/build` و`تشغيل/run` و`تنظيف/clean` على ويندوز.
 - [x] مثبت Inno Setup وaliases عربية/إنجليزية.
 - [x] إضافة `--إصدار/--version` وعقد تحقق آلي أساسي.
-- [ ] توحيد أكواد الخروج بالكامل.
+- [x] توحيد أكواد الخروج مع `compiler-cli-v1` من `0` إلى `5` وتمرير كود Baa كما هو.
 - [x] إثبات check/build/run/clean عبر runner آلي على Baa 0.6.0.
 
 ## 0.2 — الأساس الحديث
@@ -40,7 +40,7 @@
       اختبارات الوحدات بعد فصل النموذج عن globals.
 - [x] دعم Windows وLinux من نموذج تنفيذ واحد؛ ثبت runner المشترك على
       `windows-latest` و`ubuntu-latest` في إيصال CI رقم 29251889635 بتاريخ 2026-07-13.
-- [ ] استهلاك `compiler-cli-v1` وأكواد الخروج.
+- [x] استهلاك `compiler-cli-v1` وأكواد الخروج عبر check/build/run/test دون تحليل النص.
 - [x] تمرير وإتاحة `diagnostics-json-v1` عبر `فحص/check`.
 - [x] استهلاك `--emit-build-manifest` وبيانات الاعتماديات والحالة incremental.
 - [x] دعم اكتشاف الأهداف عبر `target-info-v1` بدلا من افتراض `.exe` دائما، مع تحقق

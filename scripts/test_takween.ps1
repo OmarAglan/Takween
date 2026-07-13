@@ -26,6 +26,20 @@ function Invoke-ExpectedFailure([string]$Program, [string[]]$Arguments, [string]
     return $output
 }
 
+function Invoke-ExpectedExitCode(
+    [string]$Program,
+    [string[]]$Arguments,
+    [int]$ExpectedExitCode,
+    [string]$Label
+) {
+    $output = & $Program @Arguments 2>&1 | Out-String
+    $actualExitCode = $LASTEXITCODE
+    if ($actualExitCode -ne $ExpectedExitCode) {
+        throw "$Label returned $actualExitCode instead of $ExpectedExitCode.`n$output"
+    }
+    return $output
+}
+
 $resolvedBaa = (Get-Command $BaaPath -ErrorAction Stop).Source
 $baaDirectory = Split-Path -Parent $resolvedBaa
 $oldPath = $env:PATH
@@ -82,6 +96,9 @@ try {
 
     $help = Invoke-ExpectedSuccess $takween @('--help') 'help contract'
     if ($help -notmatch 'Takween') { throw 'Help output does not contain the portable command name.' }
+
+    Invoke-ExpectedExitCode $takween @() 2 'missing command exit contract' | Out-Null
+    Invoke-ExpectedExitCode $takween @('unknown-command') 2 'unknown command exit contract' | Out-Null
 
     $version = Invoke-ExpectedSuccess $takween @('--version') 'version contract'
     if ($version -notmatch '0\.1\.0') { throw 'Version output does not contain 0.1.0.' }
@@ -426,7 +443,39 @@ commit = "$gitCommit"
             throw 'Test command did not run every test target.'
         }
         Invoke-ExpectedFailure $takween @('build', 'missing') 'missing target rejection' | Out-Null
-        Invoke-ExpectedFailure $takween @('build', 'helper') 'unsupported library target' | Out-Null
+        Invoke-ExpectedExitCode $takween @('build', 'helper') 3 'unsupported library target' | Out-Null
+        Invoke-ExpectedExitCode $takween @('test', 'missing') 3 'missing test target' | Out-Null
+
+        $fakeBin = Join-Path $multiRoot 'fake-baa-bin'
+        $fakeSource = Join-Path $multiRoot 'fake-baa.baa'
+        $fakeBaa = Join-Path $fakeBin ("baa" + $hostSuffix)
+        New-Item -ItemType Directory -Force $fakeBin | Out-Null
+        $activePath = $env:PATH
+        $arabicExitDigits = @('١', '٢', '٣', '٤', '٥')
+        try {
+            foreach ($compilerExitCode in 1..5) {
+                $digit = $arabicExitDigits[$compilerExitCode - 1]
+                $fakeSourceText = "صحيح الرئيسية() { إرجع $digit. }`n"
+                [IO.File]::WriteAllText($fakeSource, $fakeSourceText, $utf8NoBom)
+                $env:PATH = $activePath
+                Invoke-ExpectedSuccess $resolvedBaa @($fakeSource, '-o', $fakeBaa) `
+                    "fake Baa exit $compilerExitCode build" | Out-Null
+                $env:PATH = "$fakeBin$([IO.Path]::PathSeparator)$activePath"
+
+                $contractCommands = @(
+                    @{ Name = 'check'; Arguments = @('check') },
+                    @{ Name = 'build'; Arguments = @('build', 'app') },
+                    @{ Name = 'run'; Arguments = @('run', 'app') },
+                    @{ Name = 'test'; Arguments = @('test', 'test_a') }
+                )
+                foreach ($command in $contractCommands) {
+                    Invoke-ExpectedExitCode $takween $command.Arguments $compilerExitCode `
+                        "compiler-cli-v1 code $compilerExitCode through $($command.Name)" | Out-Null
+                }
+            }
+        } finally {
+            $env:PATH = $activePath
+        }
         Invoke-ExpectedSuccess $takween @('clean') 'multi-target clean' | Out-Null
     } finally {
         Pop-Location
