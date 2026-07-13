@@ -5,14 +5,14 @@
 > The Arabic-first build system for Baa.
 
 ## الحالة الحالية (Current Status)
-- **آخر تحديث:** 2026-07-11
+- **آخر تحديث:** 2026-07-13
 - **إصدار تكوين:** `0.1.0`.
 - **خط أساس باء في مساحة Eco:** `0.6.0`؛ runner ‏init/check/build/run/test/clean/targets
-  وبيان v1 واعتمادية المسار يمر بهذا المصرّف على Windows.
+  وبيان v1 واعتماديات المسار وGit المثبتة يمر بهذا المصرّف على Windows.
 - **اتجاه المشروع:** استبدال سير عمل `CMake/Make` لمشاريع Baa بواجهة أبسط (`تكوين ...`).
 - **وضع تكوين:** parser متوافق مع صيغة 0.1 ومع `takween-manifest-v1` متعدد الأهداف؛
   check/build/run/test/clean يستخدم Process API مهيكلة من Baa بلا shell، مع بناء
-  incremental واعتماديات مسار محلية واكتشاف هدف المضيف عبر `target-info-v1`.
+  incremental واعتماديات مسار/Git واكتشاف هدف المضيف عبر `target-info-v1`.
 - **الاعتمادات:** لا توجد `stdlib` محلية داخل Takween؛ يتم الاعتماد على `baalib.baahd` من تثبيت Baa.
 - **الحزم:** تصميم محلي/حتمي أولا؛ لا يوجد سجل حزم عام في 0.1.
 
@@ -70,9 +70,17 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 
 يُكتشف v1 عندما يبدأ أول سطر فعال بقسم `[ ... ]`. يدعم التنفيذ الحالي عدة أهداف
 `تنفيذي/اختبار/مكتبة`، واختيار الهدف في build/check/run، وتشغيل هدف اختبار واحد أو
-كل أهداف الاختبار، وبناء/نمطا typed واعتماديات `[الاعتماديات.<اسم>] المسار = "..."`
-المتعدية. نوع المكتبة ظاهر في الفهرس لكنه غير قابل للبناء بعد؛ وتبقى globs وGit/registry
-وملف القفل مراحل لاحقة.
+كل أهداف الاختبار، وبناء/نمطا typed واعتماديات `المسار` وGit المتعدية. تتطلب
+اعتمادية Git حقلي `git` و`commit` مثبتا من 40 أو 64 خانة hex صغيرة؛ لا تقبل branch
+أو tag. يكتب check/build/run ملف `تكوين.قفل` الحتمي وفق `takween-lock-v1`، ويعيد
+استخدام checkout معنون بالـ commit تحت `.takween/packages`. نوع المكتبة ظاهر في
+الفهرس لكنه غير قابل للبناء مستقلا بعد؛ وتبقى globs وSemVer/registry مراحل لاحقة.
+
+```text
+[الاعتماديات.sila]
+git = "https://example.invalid/sila.git"
+commit = "0123456789abcdef0123456789abcdef01234567"
+```
 
 ## مثال `مشروع.تكوين` (MVP)
 ```text

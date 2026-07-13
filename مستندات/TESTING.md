@@ -10,7 +10,7 @@
 4. Clean Safety
 5. Init Side Effects
 6. Installer Smoke (Windows)
-7. Typed Manifest + Local Path Dependency
+7. Typed Manifest + Path/Pinned-Git Dependencies + Lock Determinism
 
 ## حالات أساسية
 
@@ -38,6 +38,11 @@
 - مفتاح/قسم/نوع قيمة مجهول -> فشل واضح.
 - أهداف متعددة + مصادر متعددة + include paths -> يختار الهدف المطلوب وتدخل ملفاته خطة Baa.
 - اعتمادية `المسار` ذات بيان v1 -> تدخل مصادرها وتضميناتها خطة check/build/run.
+- اعتمادية Git بـ commit دقيق -> checkout معنون بالـ commit وتدخل مصادرها الخطة.
+- Git branch/tag أو خلط path/Git -> رفض manifest قبل التنفيذ.
+- حزمة Git ذات path متعدية -> العقدتان تظهران مع parent صحيح في `takween-lock-v1`.
+- إزالة source Git بعد أول resolution -> rebuild/run ينجحان من cache وحده.
+- تشغيل resolver مرتين -> SHA-256 لبايتات `تكوين.قفل` لا يتغير ولا يحوي CRLF.
 - output يحوي مسافة و`&` -> يبنى ويعمل وينظف دون تفسير shell.
 
 ### Clean Safety
@@ -62,7 +67,8 @@
 
 يشغل `scripts/test_takween.ps1` بناء تكوين بمصرّف Baa محدد، ثم يتحقق من
 help/version وinit/check/build/rebuild/run/clean، وعقود JSON والكاش، وحدود argv،
-وبيان v1 واعتمادية path، ورفض manifest غير صالح والأعلام الحرة ومسار clean الخطر:
+وبيان v1 واعتماديات path/Git والقفل الحتمي، ورفض manifest غير صالح والأعلام الحرة
+ومسار clean الخطر:
 
 ```powershell
 .\scripts\test_takween.ps1 -BaaPath ..\Baa\build\presets\windows-verify\baa.exe
@@ -96,3 +102,5 @@ help/version وinit/check/build/rebuild/run/clean، وعقود JSON والكاش
   بعد بناء Baa بتحذيرات تعامل كأخطاء.
 - يغطي fixture متعدد الأهداف عقد `takween-targets-v1` واختيار build/run وهدف اختبار
   واحد وتشغيل كل أهداف الاختبار ورفض الهدف المفقود ونوع المكتبة غير المدعوم.
+- ينشئ runner مستودع Git محليا بلا شبكة، ويثبت HEAD، ويتحقق من checkout المتعدي
+  وإعادة الاستخدام بعد نقل المصدر وثبات lock bytes ورفض moving refs.

@@ -21,7 +21,8 @@ Takween يستخدم **Semantic Versioning**:
 - `takween-cli-v0`: CLI الحالي التجريبي.
 - `takween-manifest-v0`: صيغة `مفتاح: قيمة` الحالية.
 - `takween-manifest-v1`: الصيغة typed المخططة.
-- `takween-lock-v1`: ملف القفل الحتمي المخطط.
+- `takween-lock-v1`: أساس ملف القفل الحتمي المنفذ لاعتماديات path/Git؛ تضيف
+  إصدارات متوافقة لاحقة SemVer/archive hashes دون تغيير معنى الحقول الحالية.
 
 تغيير schema كاسر يتطلب أداة ترحيل حتى إذا بقي Takween قبل 1.0.
 

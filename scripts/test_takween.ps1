@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
     [string]$BaaPath
@@ -8,6 +8,7 @@ $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $buildScript = Join-Path $PSScriptRoot 'build_takween.ps1'
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ("takween-tests-" + [guid]::NewGuid().ToString('N'))
+$utf8NoBom = New-Object Text.UTF8Encoding($false)
 
 function Invoke-ExpectedSuccess([string]$Program, [string[]]$Arguments, [string]$Label) {
     $output = & $Program @Arguments 2>&1 | Out-String
@@ -212,6 +213,23 @@ try {
         if (Test-Path -LiteralPath $v1BuildDirectory) {
             throw 'v1 typed clean did not remove the configured output tree.'
         }
+
+        $nonHostTarget = @($targetInfo.targets | Where-Object { $_.name -ne $targetInfo.host_target })[0].name
+        $originalV1Manifest = Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $v1Root 'مشروع.تكوين')
+        $crossTargetManifest = $originalV1Manifest.Replace(
+            "[البناء]", "[البناء]`nالهدف = `"$nonHostTarget`"")
+        [IO.File]::WriteAllText((Join-Path $v1Root 'مشروع.تكوين'), $crossTargetManifest, $utf8NoBom)
+        $crossCheck = Invoke-ExpectedSuccess $takween @('check') 'cross-target typed check'
+        $crossCheckData = $crossCheck | ConvertFrom-Json
+        if ($crossCheckData.schema_version -ne 'diagnostics-json-v1' -or
+            @($crossCheckData.diagnostics).Count -ne 0) {
+            throw 'Cross-target check did not preserve diagnostics-json-v1.'
+        }
+        $crossLock = Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $v1Root 'تكوين.قفل') | ConvertFrom-Json
+        if ($crossLock.baa.target -ne $nonHostTarget) {
+            throw 'Cross-target check did not record the requested Baa target in تكوين.قفل.'
+        }
+        [IO.File]::WriteAllText((Join-Path $v1Root 'مشروع.تكوين'), $originalV1Manifest, $utf8NoBom)
     } finally {
         Pop-Location
     }
@@ -223,6 +241,157 @@ try {
     Push-Location $invalidV1Root
     try {
         Invoke-ExpectedFailure $takween @('check') 'v1 unknown-key rejection' | Out-Null
+    } finally {
+        Pop-Location
+    }
+
+    $gitProgram = (Get-Command git -ErrorAction Stop).Source
+    $gitPackageRoot = Join-Path $tempRoot 'git-package-source'
+    New-Item -ItemType Directory -Force $gitPackageRoot | Out-Null
+    Get-ChildItem -Force -LiteralPath (Join-Path $root 'tests/fixtures/v1_git_package') |
+        Copy-Item -Destination $gitPackageRoot -Recurse -Force
+    Push-Location $gitPackageRoot
+    try {
+        Invoke-ExpectedSuccess $gitProgram @('init', '--quiet') 'local Git package init' | Out-Null
+        Invoke-ExpectedSuccess $gitProgram @('config', 'user.name', 'Takween Smoke') 'local Git user name' | Out-Null
+        Invoke-ExpectedSuccess $gitProgram @('config', 'user.email', 'takween-smoke@example.invalid') 'local Git user email' | Out-Null
+        Invoke-ExpectedSuccess $gitProgram @('config', 'core.autocrlf', 'false') 'local Git line endings' | Out-Null
+        Invoke-ExpectedSuccess $gitProgram @('add', '.') 'local Git package add' | Out-Null
+        Invoke-ExpectedSuccess $gitProgram @('commit', '--quiet', '-m', 'fixture package') 'local Git package commit' | Out-Null
+        $gitCommit = (Invoke-ExpectedSuccess $gitProgram @('rev-parse', 'HEAD') 'local Git package HEAD').Trim()
+    } finally {
+        Pop-Location
+    }
+    if ($gitCommit -notmatch '^[0-9a-f]{40}([0-9a-f]{24})?$') {
+        throw "Local Git fixture did not produce an exact commit id: $gitCommit"
+    }
+
+    $gitProjectRoot = Join-Path $tempRoot 'v1-git-dependency'
+    New-Item -ItemType Directory -Force (Join-Path $gitProjectRoot 'src') | Out-Null
+    $gitSourceForManifest = $gitPackageRoot.Replace('\', '/')
+    $gitManifest = @"
+[المشروع]
+الاسم = "git_dep_app"
+الإصدار = "1.0.0"
+إصدار_باء = ">=0.6.0 <0.8.0"
+
+[الأهداف.git_dep_app]
+النوع = "تنفيذي"
+المدخل = "src/main.baa"
+
+[البناء]
+المخرج = "build git"
+النمط = "dev"
+
+[الأنماط.dev]
+التحسين = 1
+التحقق = صواب
+
+[الاعتماديات.git_lib]
+git = "$gitSourceForManifest"
+commit = "$gitCommit"
+"@
+    [IO.File]::WriteAllText((Join-Path $gitProjectRoot 'مشروع.تكوين'), $gitManifest, $utf8NoBom)
+    $gitMain = @'
+#تضمين "git_lib.baahd"
+
+صحيح الرئيسية() {
+    إذا (قيمة_جت() != ٨٤) { إرجع ١. }
+    اطبع "pinned git dependency ok".
+    إرجع ٠.
+}
+'@
+    [IO.File]::WriteAllText((Join-Path $gitProjectRoot 'src/main.baa'), $gitMain, $utf8NoBom)
+
+    Push-Location $gitProjectRoot
+    try {
+        $gitCheck = Invoke-ExpectedSuccess $takween @('check') 'pinned Git dependency check'
+        $gitCheckData = $gitCheck | ConvertFrom-Json
+        if ($gitCheckData.schema_version -ne 'diagnostics-json-v1' -or
+            @($gitCheckData.diagnostics).Count -ne 0) {
+            throw 'Pinned Git dependency check did not preserve diagnostics-json-v1.'
+        }
+        Invoke-ExpectedSuccess $takween @('build') 'pinned Git dependency build' | Out-Null
+        $gitRun = Invoke-ExpectedSuccess $takween @('run') 'pinned Git dependency run'
+        if ($gitRun -notmatch 'pinned git dependency ok') {
+            throw 'Pinned Git dependency executable did not run transitive package behavior.'
+        }
+
+        $lockPath = Join-Path $gitProjectRoot 'تكوين.قفل'
+        if (-not (Test-Path -LiteralPath $lockPath)) { throw 'Pinned Git resolution did not create تكوين.قفل.' }
+        $lockBytes = [IO.File]::ReadAllBytes($lockPath)
+        if ([Array]::IndexOf($lockBytes, [byte]13) -ge 0) {
+            throw 'تكوين.قفل must use canonical LF bytes on every platform.'
+        }
+        $firstLockHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $lockPath).Hash
+        $lockData = Get-Content -Raw -Encoding utf8 -LiteralPath $lockPath | ConvertFrom-Json
+        if ($lockData.schema_version -ne 'takween-lock-v1' -or
+            $lockData.resolver_version -ne '0.1.0' -or
+            $lockData.baa.target -ne $targetInfo.selected_target) {
+            throw 'تكوين.قفل metadata does not match the stable lock/target contracts.'
+        }
+        if (@($lockData.packages).Count -ne 2) {
+            throw 'The deterministic lock must include the Git package and its transitive path package.'
+        }
+        $lockedGit = @($lockData.packages | Where-Object { $_.source.kind -eq 'git' })[0]
+        $lockedNested = @($lockData.packages | Where-Object { $_.source.kind -eq 'path' })[0]
+        if (-not $lockedGit -or $lockedGit.source.commit -ne $gitCommit -or
+            $lockedGit.source.url -ne $gitSourceForManifest -or $lockedGit.parent -ne 'root') {
+            throw 'The Git lock node does not preserve its exact source, commit, and root edge.'
+        }
+        if (-not $lockedNested -or $lockedNested.parent -ne 'root/git_lib' -or
+            $lockedNested.source.path -notmatch ([regex]::Escape(".takween/packages/$gitCommit/nested"))) {
+            throw 'The transitive path lock node is missing or not attached to the Git package.'
+        }
+        $cachedCheckout = Join-Path $gitProjectRoot ".takween/packages/$gitCommit"
+        if (-not (Test-Path -LiteralPath (Join-Path $cachedCheckout 'مشروع.تكوين'))) {
+            throw 'Pinned Git dependency was not materialized in the commit-addressed cache.'
+        }
+        $cacheJunk = Join-Path $cachedCheckout 'untracked-junk.tmp'
+        [IO.File]::WriteAllText($cacheJunk, 'junk', [Text.Encoding]::ASCII)
+        [IO.File]::WriteAllText((Join-Path $cachedCheckout 'src/lib.baa'), 'corrupted cache', [Text.Encoding]::ASCII)
+
+        $unavailableSource = Join-Path $tempRoot 'git-package-source-unavailable'
+        Move-Item -LiteralPath $gitPackageRoot -Destination $unavailableSource
+        Invoke-ExpectedSuccess $takween @('build') 'offline pinned Git cache reuse' | Out-Null
+        if (Test-Path -LiteralPath $cacheJunk) {
+            throw 'Pinned Git cache reuse did not clean untracked content.'
+        }
+        $secondLockHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $lockPath).Hash
+        if ($secondLockHash -ne $firstLockHash) {
+            throw 'Repeated offline resolution changed deterministic تكوين.قفل bytes.'
+        }
+        $cachedRun = Invoke-ExpectedSuccess $takween @('run') 'offline pinned Git run'
+        if ($cachedRun -notmatch 'pinned git dependency ok') {
+            throw 'Commit-addressed cache reuse did not preserve executable behavior.'
+        }
+    } finally {
+        Pop-Location
+    }
+
+    $branchManifestRoot = Join-Path $tempRoot 'v1-git-branch-invalid'
+    Copy-Item -LiteralPath $gitProjectRoot -Destination $branchManifestRoot -Recurse -Force
+    $branchManifestPath = Join-Path $branchManifestRoot 'مشروع.تكوين'
+    $branchManifestText = (Get-Content -Raw -Encoding utf8 -LiteralPath $branchManifestPath).Replace(
+        "commit = `"$gitCommit`"", 'commit = main')
+    [IO.File]::WriteAllText($branchManifestPath, $branchManifestText, $utf8NoBom)
+    Push-Location $branchManifestRoot
+    try {
+        $branchFailure = Invoke-ExpectedFailure $takween @('check') 'moving Git ref rejection'
+        if ($branchFailure -notmatch 'commit') {
+            throw 'Moving Git ref rejection did not return the typed commit diagnostic.'
+        }
+    } finally {
+        Pop-Location
+    }
+
+    $mixedManifestRoot = Join-Path $tempRoot 'v1-git-mixed-invalid'
+    Copy-Item -LiteralPath $gitProjectRoot -Destination $mixedManifestRoot -Recurse -Force
+    $mixedManifestPath = Join-Path $mixedManifestRoot 'مشروع.تكوين'
+    [IO.File]::AppendAllText($mixedManifestPath, "`nالمسار = `"local`"`n", $utf8NoBom)
+    Push-Location $mixedManifestRoot
+    try {
+        Invoke-ExpectedFailure $takween @('check') 'mixed dependency source rejection' | Out-Null
     } finally {
         Pop-Location
     }

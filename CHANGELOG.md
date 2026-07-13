@@ -22,6 +22,10 @@
 - fixtures smoke لـ v1 واعتمادية مسار ومخرجات تحوي مسافة و`&` ورفض مفتاح مجهول.
 - أهداف v1 متعددة مع اختيار build/check/run، وأمر `test` لهدف واحد أو كل أهداف
   الاختبار، وعقد فهرسة `takween-targets-v1` لتكامل Qalam وCI.
+- اعتماديات Git مثبتة بحقل `commit` exact، تُجلب وتُفحص عبر argv بلا shell وتخزن
+  في `.takween/packages/<commit>` مع تعطيل checkout hooks والبروتوكولات غير المعتمدة.
+- `takween-lock-v1` حتمي بـ UTF-8/LF للمشروع وهدف Baa وعقد path/Git المتعدية؛
+  يغطي smoke ثبات البايتات وإعادة استخدام cache offline ورفض branch والمصدر المختلط.
 
 ### تغيّر
 

@@ -9,6 +9,7 @@ build/
 
 # Distribution artifacts
 dist/
+.takween/
 
 # Temporary and IDE files
 .vscode/
