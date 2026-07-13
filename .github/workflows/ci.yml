@@ -16,12 +16,12 @@ jobs:
 
     steps:
       - name: Check out Takween
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           path: Takween
 
       - name: Check out Baa
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: OmarAglan/Baa
           ref: master
