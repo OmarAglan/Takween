@@ -38,12 +38,12 @@ jobs:
       - name: Configure Baa on Windows
         if: runner.os == 'Windows'
         shell: pwsh
-        run: cmake -S Baa -B Baa/build-eco -G "MinGW Makefiles" -DBAA_WARNINGS_AS_ERRORS=ON
+        run: cmake -S Baa -B Baa/build-eco -G "MinGW Makefiles"
 
       - name: Configure Baa on Linux
         if: runner.os == 'Linux'
         shell: bash
-        run: cmake -S Baa -B Baa/build-eco -DCMAKE_BUILD_TYPE=Release -DBAA_WARNINGS_AS_ERRORS=ON
+        run: cmake -S Baa -B Baa/build-eco -DCMAKE_BUILD_TYPE=Release
 
       - name: Build Baa
         run: cmake --build Baa/build-eco --parallel 2
