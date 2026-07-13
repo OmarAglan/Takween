@@ -38,8 +38,8 @@
       دون إعادة تفسير shell.
 - [x] إضافة smoke آلي لعقود parser وCLI وسلامة clean والبناء/التشغيل؛ تبقى
       اختبارات الوحدات بعد فصل النموذج عن globals.
-- [ ] دعم Windows وLinux من نموذج تنفيذ واحد (المصدر والrunner مشتركان؛ Windows
-      مثبت، والتحقق المحلي على Linux غير متاح في جهاز العمل الحالي لغياب WSL/container/toolchain).
+- [x] دعم Windows وLinux من نموذج تنفيذ واحد؛ ثبت runner المشترك على
+      `windows-latest` و`ubuntu-latest` في إيصال CI رقم 29251889635 بتاريخ 2026-07-13.
 - [ ] استهلاك `compiler-cli-v1` وأكواد الخروج.
 - [x] تمرير وإتاحة `diagnostics-json-v1` عبر `فحص/check`.
 - [x] استهلاك `--emit-build-manifest` وبيانات الاعتماديات والحالة incremental.

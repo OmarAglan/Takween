@@ -77,9 +77,10 @@ help/version وinit/check/build/rebuild/run/clean، وعقود JSON والكاش
 لا يعد الاختبار ناجحا إذا استخدم Baa مختلفا بصمت؛ يطبع runner المسار والإصدار.
 
 الrunner يستخدم `IO.Path.PathSeparator` ولا يحتوي مسار تنفيذ Windows خاصا، لذا
-هو نفسه عقد Windows/Linux. إيصال 2026-07-11 الحالي ناجح على Windows. لم يمكن
-تشغيل إيصال Linux محليا لأن المضيف لا يملك WSL distribution ولا Docker/Podman
-ولا toolchain Linux؛ يجب تشغيل الأمر نفسه عبر `pwsh` على مضيف Linux قبل بوابة 0.2.
+هو نفسه عقد Windows/Linux. إيصال GitHub Actions رقم
+[29251889635](https://github.com/OmarAglan/Takween/actions/runs/29251889635)
+بتاريخ 2026-07-13 شغّل الملف نفسه عبر `pwsh` ونجح على
+`windows-latest` و`ubuntu-latest`، بما في ذلك اعتماديات Git المثبتة والقفل الحتمي.
 
 ## سيناريو المثبت (يدوي)
 1. شغّل `scripts\build_installer.ps1`.
@@ -95,11 +96,10 @@ help/version وinit/check/build/rebuild/run/clean، وعقود JSON والكاش
 ## البوابات التالية
 
 - اختبارات parser بوحدات صغيرة بعد فصل النموذج عن globals.
-- تشغيل runner نفسه على Linux وتسجيل الإيصال؛ إزالة `cmd /c` واختبار Windows مكتملان.
 - يتحقق runner من `target-info-v1` ومن أن اسم ناتج Takween وناتج المشروع يستخدمان
   لاحقة التنفيذ التي أعلنها Baa للمضيف.
 - يشغل `.github/workflows/ci.yml` runner نفسه على `windows-latest` و`ubuntu-latest`
-  بعد بناء Baa بتحذيرات تعامل كأخطاء.
+  بعد بناء Baa بإعداد CI القياسي نفسه.
 - يغطي fixture متعدد الأهداف عقد `takween-targets-v1` واختيار build/run وهدف اختبار
   واحد وتشغيل كل أهداف الاختبار ورفض الهدف المفقود ونوع المكتبة غير المدعوم.
 - ينشئ runner مستودع Git محليا بلا شبكة، ويثبت HEAD، ويتحقق من checkout المتعدي
