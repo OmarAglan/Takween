@@ -28,7 +28,7 @@
 3. تأكد بعد التثبيت:
 
 ```powershell
-تكوين --help
+تكوين --مساعدة
 baa --version
 ```
 
@@ -73,11 +73,15 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 كل أهداف الاختبار، وبناء/نمطا typed واعتماديات `المسار` وGit المتعدية. تتطلب
 اعتمادية Git حقلي `git` و`commit` مثبتا من 40 أو 64 خانة hex صغيرة؛ لا تقبل branch
 أو tag. يكتب check/build/run ملف `تكوين.قفل` الحتمي وفق `takween-lock-v1`، ويعيد
-استخدام checkout معنون بالـ commit تحت `.takween/packages`. نوع المكتبة ظاهر في
-الفهرس لكنه غير قابل للبناء مستقلا بعد؛ وتبقى globs وSemVer/registry مراحل لاحقة.
+استخدام checkout معنون بالـ commit تحت `.takween/packages`. تحل اعتماديات الإصدار
+قيود SemVer من فهرس محلي، وتفك `takween-archive-v1` الآمن إلى cache معنون بـSHA-256.
+ينفذ `تحقق --بدون_شبكة` التحقق الصارم بلا جلب، وينسخ `توريد` الحزم حتميا، ويسجل
+القفل قيد Baa والهدف والقدرات والاختيار الدقيق. أسماء المشاريع والحزم والاعتماديات
+عربية فقط. نوع المكتبة ظاهر في الفهرس لكنه غير قابل للبناء مستقلا بعد؛ وتبقى globs
+والسجل العام والنشر مراحل لاحقة.
 
 ```text
-[الاعتماديات.sila]
+[الاعتماديات.صلة]
 git = "https://example.invalid/sila.git"
 commit = "0123456789abcdef0123456789abcdef01234567"
 ```

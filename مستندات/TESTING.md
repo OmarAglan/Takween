@@ -12,6 +12,7 @@
 6. Installer Smoke (Windows)
 7. Typed Manifest + Path/Pinned-Git/Local-Archive Dependencies + Lock Determinism
 8. SemVer + SHA-256 + Locked/Offline Resolution
+9. Bounded Archive Extraction + Deterministic Vendoring + Arabic Identity
 
 ## حالات أساسية
 
@@ -54,6 +55,16 @@
 - تعديل البيان بعد القفل -> يرفض `--locked` القفل القديم ويحذف مرشح المقارنة.
 - إزالة أي مجال مطابق -> تعارض SemVer صريح.
 - محتوى cache معنون بـ SHA-256 ومصدر الفهرس بلا شبكة -> build/run ينجحان offline.
+- `تحقق --بدون_شبكة` مع cache سليم وقفل مطابق -> نجاح بلا إصلاح أو جلب.
+- تعديل ملف داخل cache -> التحقق دون شبكة يرفض؛ الحل العادي يعيد الاستخراج من
+  الأرشيف immutable ثم ينجح التحقق.
+- `توريد` مرتين -> شجرة `مورد/<اسم>/<إصدار>/<sha256>` وتجزئات كل ملفاتها متطابقة.
+- absolute path أو `..` أو سجل link أو مسار مكرر/متصادم أو غير مرتب -> فشل ولا
+  تبقى شجرة cache مرشحة.
+- حجم ملف فوق 8 MiB أو مجموع/عدد غير مطابق أو SHA-256 داخلي خاطئ -> فشل محدود.
+- قيد Baa للجذر أو الحزمة غير مطابق، أو target غير موجود، أو قدرة build ناقصة
+  -> كود غير مدعوم واضح.
+- اسم مشروع/حزمة/alias لاتيني -> رفض بعقد الهوية العربية فقط.
 - output يحوي مسافة و`&` -> يبنى ويعمل وينظف دون تفسير shell.
 
 ### Clean Safety
@@ -79,6 +90,7 @@
 يشغل `scripts/test_takween.ps1` بناء تكوين بمصرّف Baa محدد، ثم يتحقق من
 help/version وinit/check/build/rebuild/run/clean، وعقود JSON والكاش، وحدود argv،
 وبيان v1 واعتماديات path/Git/archive وSemVer وSHA-256 و`--locked` والقفل الحتمي،
+وفك الأرشيف المحدود والتوريد والتحقق دون شبكة والهوية العربية وقيود Baa/target،
 ورفض manifest غير صالح والأعلام الحرة
 ومسار clean الخطر. كما يبني Baa مزيفا لكل كود `compiler-cli-v1` من `1` إلى `5`
 ويثبت مروره كما هو عبر check/build/run/test:
@@ -100,11 +112,11 @@ help/version وinit/check/build/rebuild/run/clean، وعقود JSON والكاش
 1. شغّل `scripts\build_installer.ps1`.
 2. ثبّت النسخة الناتجة.
 3. افتح Terminal جديد ونفّذ:
-   - `تكوين --help`
+   - `تكوين --مساعدة`
    - `baa --version`
 4. نفّذ `تكوين تهيئة` في مجلد فارغ.
-5. نفّذ `تكوين build` ثم `تكوين run` وتحقق من التشغيل.
-6. نفّذ `تكوين clean` وتحقق من حذف مخرجات البناء فقط.
+5. نفّذ `تكوين بناء` ثم `تكوين تشغيل` وتحقق من التشغيل.
+6. نفّذ `تكوين تنظيف` وتحقق من حذف مخرجات البناء فقط.
 7. ألغ التثبيت وتأكد من إزالة مسار Takween من PATH.
 
 ## البوابات التالية

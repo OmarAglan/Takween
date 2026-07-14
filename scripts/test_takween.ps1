@@ -40,6 +40,48 @@ function Invoke-ExpectedExitCode(
     return $output
 }
 
+function Get-BytesSha256([byte[]]$Bytes) {
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        return (-join ($sha.ComputeHash($Bytes) | ForEach-Object { $_.ToString('x2') }))
+    } finally {
+        $sha.Dispose()
+    }
+}
+
+function New-TakweenArchive([string]$ArchivePath, [hashtable]$Files) {
+    [string[]]$paths = @($Files.Keys)
+    [Array]::Sort($paths, [StringComparer]::Ordinal)
+    $lines = [Collections.Generic.List[string]]::new()
+    $lines.Add('takween-archive-v1')
+    [long]$total = 0
+    foreach ($path in $paths) {
+        [byte[]]$bytes = $Files[$path]
+        $digest = Get-BytesSha256 $bytes
+        $payload = ([BitConverter]::ToString($bytes)).Replace('-', '').ToLowerInvariant()
+        $lines.Add("ملف`t$path`t$($bytes.Length)`t$digest`t$payload")
+        $total += $bytes.Length
+    }
+    $lines.Add("نهاية`t$($paths.Count)`t$total")
+    [IO.File]::WriteAllText($ArchivePath, (($lines -join "`n") + "`n"), $utf8NoBom)
+}
+
+function Write-RawTakweenArchive([string]$ArchivePath, [string[]]$Records) {
+    $lines = @('takween-archive-v1') + $Records
+    [IO.File]::WriteAllText($ArchivePath, (($lines -join "`n") + "`n"), $utf8NoBom)
+}
+
+function Get-TreeReceipt([string]$RootPath) {
+    return @(
+        Get-ChildItem -LiteralPath $RootPath -Recurse -File |
+            Sort-Object { $_.FullName.Substring($RootPath.Length) } |
+            ForEach-Object {
+                $relative = $_.FullName.Substring($RootPath.Length).TrimStart('\', '/').Replace('\', '/')
+                "$relative`t$((Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant())"
+            }
+    ) -join "`n"
+}
+
 $resolvedBaa = (Get-Command $BaaPath -ErrorAction Stop).Source
 $baaDirectory = Split-Path -Parent $resolvedBaa
 $oldPath = $env:PATH
@@ -80,7 +122,7 @@ try {
     $hostSuffix = [string]$hostTarget.executable_suffix
 
     & $buildScript -Version '0.1.0' -BaaPath $resolvedBaa -BaaStdlibPath $baaStdlib
-    $takween = Join-Path $root ("dist/bin/takween" + $hostSuffix)
+    $takween = Join-Path $root ("dist/bin/تكوين" + $hostSuffix)
     if (-not (Test-Path -LiteralPath $takween)) {
         throw "Takween executable was not produced: $takween"
     }
@@ -94,19 +136,19 @@ try {
         throw 'Takween executor regressed to shell command strings.'
     }
 
-    $help = Invoke-ExpectedSuccess $takween @('--help') 'help contract'
+    $help = Invoke-ExpectedSuccess $takween @('--مساعدة') 'Arabic help contract'
     if ($help -notmatch 'Takween') { throw 'Help output does not contain the portable command name.' }
 
     Invoke-ExpectedExitCode $takween @() 2 'missing command exit contract' | Out-Null
-    Invoke-ExpectedExitCode $takween @('unknown-command') 2 'unknown command exit contract' | Out-Null
+    Invoke-ExpectedExitCode $takween @('أمر_مجهول') 2 'unknown command exit contract' | Out-Null
 
-    $version = Invoke-ExpectedSuccess $takween @('--version') 'version contract'
+    $version = Invoke-ExpectedSuccess $takween @('--إصدار') 'Arabic version contract'
     if ($version -notmatch '0\.1\.0') { throw 'Version output does not contain 0.1.0.' }
 
     New-Item -ItemType Directory -Force $tempRoot | Out-Null
     Push-Location $tempRoot
     try {
-        Invoke-ExpectedSuccess $takween @('init') 'init workflow' | Out-Null
+        Invoke-ExpectedSuccess $takween @('تهيئة') 'Arabic init workflow' | Out-Null
         $manifestPath = Get-ChildItem -LiteralPath $tempRoot -File | Select-Object -First 1
         $sourcePath = Get-ChildItem -LiteralPath $tempRoot -Recurse -File -Filter '*.baa' |
             Where-Object { $_.Extension -eq '.baa' } |
@@ -114,7 +156,7 @@ try {
         if (-not $manifestPath) { throw 'init did not create a project manifest.' }
         if (-not $sourcePath) { throw 'init did not create the main source.' }
 
-        $check = Invoke-ExpectedSuccess $takween @('check') 'check workflow'
+        $check = Invoke-ExpectedSuccess $takween @('فحص') 'Arabic check workflow'
         $checkData = $check | ConvertFrom-Json
         if ($checkData.schema_version -ne 'diagnostics-json-v1') {
             throw 'check did not forward the diagnostics-json-v1 contract.'
@@ -123,7 +165,7 @@ try {
             throw 'check reported diagnostics for the generated valid project.'
         }
 
-        Invoke-ExpectedSuccess $takween @('build') 'build workflow' | Out-Null
+        Invoke-ExpectedSuccess $takween @('بناء') 'Arabic build workflow' | Out-Null
         $buildManifestItem = Get-ChildItem -LiteralPath $tempRoot -Recurse -File -Filter 'build-manifest.json' |
             Select-Object -First 1
         if (-not $buildManifestItem) {
@@ -145,15 +187,15 @@ try {
             throw 'build manifest does not expose schema 1 incremental state.'
         }
 
-        Invoke-ExpectedSuccess $takween @('build') 'incremental rebuild workflow' | Out-Null
+        Invoke-ExpectedSuccess $takween @('بناء') 'Arabic incremental rebuild workflow' | Out-Null
         $secondBuildData = Get-Content -Raw -Encoding utf8 -LiteralPath $buildManifest | ConvertFrom-Json
         $cacheHits = @($secondBuildData.units | Where-Object { $_.cache.hit })
         if ($cacheHits.Count -lt 1) {
             throw 'incremental rebuild did not report a cache hit.'
         }
 
-        Invoke-ExpectedSuccess $takween @('run') 'run workflow' | Out-Null
-        Invoke-ExpectedSuccess $takween @('clean') 'clean workflow' | Out-Null
+        Invoke-ExpectedSuccess $takween @('تشغيل') 'Arabic run workflow' | Out-Null
+        Invoke-ExpectedSuccess $takween @('تنظيف') 'Arabic clean workflow' | Out-Null
         if (Test-Path -LiteralPath $buildDirectory) { throw 'clean did not remove the build directory.' }
 
         $manifestLines = @(Get-Content -Encoding utf8 -LiteralPath $manifestPath.FullName)
@@ -284,31 +326,27 @@ try {
 
     $archiveRoot = Join-Path $tempRoot 'local-archive-index'
     $archiveFiles = Join-Path $archiveRoot 'archives'
-    $archiveCache = Join-Path $archiveRoot 'sha256'
-    New-Item -ItemType Directory -Force $archiveFiles, $archiveCache | Out-Null
+    New-Item -ItemType Directory -Force $archiveFiles | Out-Null
     $indexRows = [Collections.Generic.List[string]]::new()
     $archiveRecords = @{}
     foreach ($candidate in @(
-        @{ Version = '2.0.0'; Value = '200' },
-        @{ Version = '1.0.0'; Value = '100' },
-        @{ Version = '1.1.0-alpha.1'; Value = '110' },
-        @{ Version = '1.2.0'; Value = '120' },
-        @{ Version = '1.2.0+build.1'; Value = '121' }
+        @{ Version = '2.0.0'; Value = '200'; Baa = '>=99.0.0' },
+        @{ Version = '1.0.0'; Value = '100'; Baa = '>=0.6.0 <0.8.0' },
+        @{ Version = '1.1.0-alpha.1'; Value = '110'; Baa = '>=0.6.0 <0.8.0' },
+        @{ Version = '1.2.0'; Value = '120'; Baa = '>=0.6.0 <0.8.0' },
+        @{ Version = '1.2.0+build.1'; Value = '121'; Baa = '>=0.6.0 <0.8.0' }
     )) {
-        $archivePath = Join-Path $archiveFiles ("archive_lib-$($candidate.Version).tkw")
-        [IO.File]::WriteAllText($archivePath, "takween-archive-v1:$($candidate.Version)`n", $utf8NoBom)
-        $digest = (Get-FileHash -Algorithm SHA256 -LiteralPath $archivePath).Hash.ToLowerInvariant()
-        $contentRoot = Join-Path $archiveCache $digest
-        New-Item -ItemType Directory -Force (Join-Path $contentRoot 'src'), (Join-Path $contentRoot 'include') | Out-Null
+        $archivePath = Join-Path $archiveFiles ("مكتبة_أرشيف-$($candidate.Version).tkw")
         $packageManifest = @"
 [المشروع]
-الاسم = "archive_lib"
+الاسم = "مكتبة_أرشيف"
 الإصدار = "$($candidate.Version)"
+إصدار_باء = "$($candidate.Baa)"
 
-[الأهداف.archive_lib]
+[الأهداف.مكتبة_أرشيف]
 النوع = "مكتبة"
-المدخل = "src/lib.baa"
-مسارات_التضمين = ["include"]
+المدخل = "مصدر/المكتبة.baa"
+مسارات_التضمين = ["تضمين"]
 
 [البناء]
 المخرج = "build"
@@ -318,20 +356,17 @@ try {
 التحسين = 1
 التحقق = خطأ
 "@
-        [IO.File]::WriteAllText((Join-Path $contentRoot 'مشروع.تكوين'), $packageManifest, $utf8NoBom)
-        [IO.File]::WriteAllText(
-            (Join-Path $contentRoot 'include/archive_lib.baahd'),
-            "صحيح قيمة_أرشيف().`n",
-            $utf8NoBom)
-        [IO.File]::WriteAllText(
-            (Join-Path $contentRoot 'src/lib.baa'),
-            "صحيح قيمة_أرشيف() { إرجع $($candidate.Value). }`n",
-            $utf8NoBom)
-        $indexRows.Add("archive_lib`t$($candidate.Version)`t$digest`t$archivePath`t$contentRoot")
+        $files = @{
+            'مشروع.تكوين' = $utf8NoBom.GetBytes($packageManifest)
+            'تضمين/واجهة_الأرشيف.baahd' = $utf8NoBom.GetBytes("صحيح قيمة_أرشيف().`n")
+            'مصدر/المكتبة.baa' = $utf8NoBom.GetBytes("صحيح قيمة_أرشيف() { إرجع $($candidate.Value). }`n")
+        }
+        New-TakweenArchive $archivePath $files
+        $digest = (Get-FileHash -Algorithm SHA256 -LiteralPath $archivePath).Hash.ToLowerInvariant()
+        $indexRows.Add("مكتبة_أرشيف`t$($candidate.Version)`t$digest`t$archivePath")
         $archiveRecords[$candidate.Version] = @{
             Archive = $archivePath
             Digest = $digest
-            Content = $contentRoot
             Bytes = [IO.File]::ReadAllBytes($archivePath)
         }
     }
@@ -342,16 +377,16 @@ try {
         $utf8NoBom)
 
     $archiveProject = Join-Path $tempRoot 'v1-archive-dependency'
-    New-Item -ItemType Directory -Force (Join-Path $archiveProject 'src') | Out-Null
+    New-Item -ItemType Directory -Force (Join-Path $archiveProject 'مصدر') | Out-Null
     $archiveProjectManifest = @'
 [المشروع]
-الاسم = "archive_app"
+الاسم = "تطبيق_أرشيف"
 الإصدار = "1.0.0"
 إصدار_باء = ">=0.6.0 <0.8.0"
 
-[الأهداف.archive_app]
+[الأهداف.تطبيق_أرشيف]
 النوع = "تنفيذي"
-المدخل = "src/main.baa"
+المدخل = "مصدر/الرئيسية.baa"
 
 [البناء]
 المخرج = "build"
@@ -361,20 +396,20 @@ try {
 التحسين = 1
 التحقق = صواب
 
-[الاعتماديات.archive_lib]
+[الاعتماديات.مكتبة_أرشيف]
 الإصدار = "^1.0.0"
 '@
     [IO.File]::WriteAllText((Join-Path $archiveProject 'مشروع.تكوين'), $archiveProjectManifest, $utf8NoBom)
     $archiveMain = @'
-#تضمين "archive_lib.baahd"
+#تضمين "واجهة_الأرشيف.baahd"
 
 صحيح الرئيسية() {
     إذا (قيمة_أرشيف() != ١٢١) { إرجع ١. }
-    اطبع "semver archive dependency ok".
+    اطبع "اعتمادية الأرشيف تعمل".
     إرجع ٠.
 }
 '@
-    [IO.File]::WriteAllText((Join-Path $archiveProject 'src/main.baa'), $archiveMain, $utf8NoBom)
+    [IO.File]::WriteAllText((Join-Path $archiveProject 'مصدر/الرئيسية.baa'), $archiveMain, $utf8NoBom)
 
     $oldPackageIndex = $env:TAKWEEN_PACKAGE_INDEX
     $env:TAKWEEN_PACKAGE_INDEX = $indexPath
@@ -382,7 +417,7 @@ try {
     try {
         Invoke-ExpectedSuccess $takween @('build') 'SemVer local archive build' | Out-Null
         $archiveRun = Invoke-ExpectedSuccess $takween @('run', '--locked') 'locked offline archive run'
-        if ($archiveRun -notmatch 'semver archive dependency ok') {
+        if ($archiveRun -notmatch 'اعتمادية الأرشيف تعمل') {
             throw 'The highest compatible local archive was not selected and linked.'
         }
         $archiveLockPath = Join-Path $archiveProject 'تكوين.قفل'
@@ -396,8 +431,45 @@ try {
             $archiveNode.source.archive -ne $archiveRecords['1.2.0+build.1'].Archive) {
             throw 'Archive lock node does not preserve the exact SemVer choice and immutable SHA-256 source.'
         }
+        if ($archiveLock.baa.constraint -ne '>=0.6.0 <0.8.0' -or
+            @($archiveLock.baa.capabilities).Count -ne 1 -or
+            @($archiveLock.baa.capabilities)[0] -ne 'تجميع') {
+            throw 'Lockfile does not preserve the Baa version and target capability constraints.'
+        }
         if ((Get-FileHash -Algorithm SHA256 -LiteralPath $archiveLockPath).Hash -ne $archiveLockHash) {
             throw 'Locked offline archive resolution changed the lock bytes.'
+        }
+
+        Invoke-ExpectedSuccess $takween @('تحقق', '--بدون_شبكة') 'explicit offline verification' | Out-Null
+        $selectedCache = Join-Path $archiveProject ('.takween/packages/sha256/' + $archiveRecords['1.2.0+build.1'].Digest)
+        $cachedSource = Join-Path $selectedCache 'مصدر/المكتبة.baa'
+        [IO.File]::WriteAllText($cachedSource, 'تالف', $utf8NoBom)
+        Invoke-ExpectedFailure $takween @('تحقق', '--بدون_شبكة') 'tampered extracted cache rejection' | Out-Null
+        Invoke-ExpectedSuccess $takween @('check') 'archive cache repair from immutable source' | Out-Null
+        Invoke-ExpectedSuccess $takween @('تحقق', '--بدون_شبكة') 'offline verification after repair' | Out-Null
+
+        $cachedOriginalHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $cachedSource).Hash.ToLowerInvariant()
+        $forgedSource = "صحيح قيمة_أرشيف() { إرجع ٩٩٩. }`n"
+        [IO.File]::WriteAllText($cachedSource, $forgedSource, $utf8NoBom)
+        $cachedForgedHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $cachedSource).Hash.ToLowerInvariant()
+        $cacheReceipt = Join-Path $selectedCache '.تكوين-استخراج-v1'
+        $forgedReceipt = (Get-Content -Raw -Encoding utf8 -LiteralPath $cacheReceipt).Replace(
+            $cachedOriginalHash,
+            $cachedForgedHash)
+        [IO.File]::WriteAllText($cacheReceipt, $forgedReceipt, $utf8NoBom)
+        Invoke-ExpectedFailure $takween @('تحقق', '--بدون_شبكة') 'forged cache receipt rejection' | Out-Null
+        Invoke-ExpectedSuccess $takween @('فحص') 'forged cache repair from immutable archive' | Out-Null
+        Invoke-ExpectedSuccess $takween @('تحقق', '--بدون_شبكة') 'offline verification after forged receipt repair' | Out-Null
+
+        Invoke-ExpectedSuccess $takween @('توريد') 'deterministic archive vendoring' | Out-Null
+        $vendorRoot = Join-Path $archiveProject ('مورد/مكتبة_أرشيف/1.2.0+build.1/' + $archiveRecords['1.2.0+build.1'].Digest)
+        if (-not (Test-Path -LiteralPath (Join-Path $vendorRoot 'تضمين/واجهة_الأرشيف.baahd'))) {
+            throw 'Vendoring did not create the immutable Arabic package path.'
+        }
+        $firstVendorReceipt = Get-TreeReceipt $vendorRoot
+        Invoke-ExpectedSuccess $takween @('توريد') 'repeat deterministic archive vendoring' | Out-Null
+        if ((Get-TreeReceipt $vendorRoot) -cne $firstVendorReceipt) {
+            throw 'Repeated vendoring did not reproduce the exact file tree and hashes.'
         }
 
         [IO.File]::WriteAllBytes($archiveRecords['1.2.0+build.1'].Archive, [byte[]](1, 2, 3, 4))
@@ -435,7 +507,64 @@ try {
         if ($invalidRangeFailure -notmatch 'قيد|Semantic') {
             throw 'Invalid SemVer range did not fail at the typed manifest boundary.'
         }
+
+        $incompatibleDependencyManifest = $archiveProjectManifest.Replace('^1.0.0', '2.0.0')
+        [IO.File]::WriteAllText((Join-Path $archiveProject 'مشروع.تكوين'), $incompatibleDependencyManifest, $utf8NoBom)
+        $dependencyConstraintFailure = Invoke-ExpectedFailure $takween @('check') 'dependency Baa constraint rejection'
+        if ($dependencyConstraintFailure -notmatch 'إصدار Baa') {
+            throw 'An incompatible dependency Baa version constraint was not reported.'
+        }
+
+        $incompatibleBaaManifest = $archiveProjectManifest.Replace('>=0.6.0 <0.8.0', '>=99.0.0')
+        [IO.File]::WriteAllText((Join-Path $archiveProject 'مشروع.تكوين'), $incompatibleBaaManifest, $utf8NoBom)
+        Invoke-ExpectedExitCode $takween @('check') 3 'root Baa constraint exit contract' | Out-Null
+
+        $invalidTargetManifest = $archiveProjectManifest.Replace(
+            'المخرج = "build"',
+            "المخرج = `"build`"`nالهدف = `"هدف_غير_موجود`"")
+        [IO.File]::WriteAllText((Join-Path $archiveProject 'مشروع.تكوين'), $invalidTargetManifest, $utf8NoBom)
+        Invoke-ExpectedExitCode $takween @('check') 3 'target constraint exit contract' | Out-Null
+
+        $latinIdentityManifest = $archiveProjectManifest.Replace('تطبيق_أرشيف', 'archive_app')
+        [IO.File]::WriteAllText((Join-Path $archiveProject 'مشروع.تكوين'), $latinIdentityManifest, $utf8NoBom)
+        $latinIdentityFailure = Invoke-ExpectedExitCode $takween @('check') 3 'Latin package identity rejection'
+        if ($latinIdentityFailure -notmatch 'اسما عربيا فقط') {
+            throw 'Latin package identity rejection did not explain the Arabic-only contract.'
+        }
+
         [IO.File]::WriteAllText((Join-Path $archiveProject 'مشروع.تكوين'), $archiveProjectManifest, $utf8NoBom)
+        [IO.File]::WriteAllText(
+            $indexPath,
+            "takween-index-v1`n" + (($indexRows -join "`n") + "`n"),
+            $utf8NoBom)
+        Invoke-ExpectedSuccess $takween @('check') 'restore canonical archive resolution' | Out-Null
+
+        $emptyDigest = Get-BytesSha256 ([byte[]]@())
+        $zeroDigest = ('0' * 64) -join ''
+        $malformedArchives = @(
+            @{ Name = 'absolute'; Records = @("ملف`t/خطر`t0`t$emptyDigest`t", "نهاية`t1`t0") },
+            @{ Name = 'parent'; Records = @("ملف`t../خطر`t0`t$emptyDigest`t", "نهاية`t1`t0") },
+            @{ Name = 'link'; Records = @("رابط`tخطر`t0`t$emptyDigest`t", "نهاية`t1`t0") },
+            @{ Name = 'duplicate'; Records = @("ملف`tمسار`t0`t$emptyDigest`t", "ملف`tمسار`t0`t$emptyDigest`t", "نهاية`t2`t0") },
+            @{ Name = 'collision'; Records = @("ملف`tمسار`t0`t$emptyDigest`t", "ملف`tمسار/ابن`t0`t$emptyDigest`t", "نهاية`t2`t0") },
+            @{ Name = 'resource'; Records = @("ملف`tضخم`t8388609`t$emptyDigest`t", "نهاية`t1`t8388609") },
+            @{ Name = 'unsorted'; Records = @("ملف`tي`t0`t$emptyDigest`t", "ملف`tأ`t0`t$emptyDigest`t", "نهاية`t2`t0") },
+            @{ Name = 'entry-sha'; Records = @("ملف`tمشروع.تكوين`t1`t$zeroDigest`t00", "نهاية`t1`t1") }
+        )
+        foreach ($bad in $malformedArchives) {
+            $badArchive = Join-Path $archiveFiles ("غير_صالح-$($bad.Name).tkw")
+            Write-RawTakweenArchive $badArchive $bad.Records
+            $badDigest = (Get-FileHash -Algorithm SHA256 -LiteralPath $badArchive).Hash.ToLowerInvariant()
+            [IO.File]::WriteAllText(
+                $indexPath,
+                "takween-index-v1`nمكتبة_أرشيف`t1.2.0+build.1`t$badDigest`t$badArchive`n",
+                $utf8NoBom)
+            Invoke-ExpectedFailure $takween @('check') "unsafe archive rejection: $($bad.Name)" | Out-Null
+            $badCache = Join-Path $archiveProject ('.takween/packages/sha256/' + $badDigest)
+            if (Test-Path -LiteralPath $badCache) {
+                throw "Unsafe archive '$($bad.Name)' left an extracted cache tree."
+            }
+        }
     } finally {
         Pop-Location
         $env:TAKWEEN_PACKAGE_INDEX = $oldPackageIndex
@@ -467,11 +596,11 @@ try {
     $gitSourceForManifest = $gitPackageRoot.Replace('\', '/')
     $gitManifest = @"
 [المشروع]
-الاسم = "git_dep_app"
+الاسم = "تطبيق_جت"
 الإصدار = "1.0.0"
 إصدار_باء = ">=0.6.0 <0.8.0"
 
-[الأهداف.git_dep_app]
+[الأهداف.تطبيق_جت]
 النوع = "تنفيذي"
 المدخل = "src/main.baa"
 
@@ -483,7 +612,7 @@ try {
 التحسين = 1
 التحقق = صواب
 
-[الاعتماديات.git_lib]
+[الاعتماديات.مكتبة_جت]
 git = "$gitSourceForManifest"
 commit = "$gitCommit"
 "@
@@ -535,7 +664,7 @@ commit = "$gitCommit"
             $lockedGit.source.url -ne $gitSourceForManifest -or $lockedGit.parent -ne 'root') {
             throw 'The Git lock node does not preserve its exact source, commit, and root edge.'
         }
-        if (-not $lockedNested -or $lockedNested.parent -ne 'root/git_lib' -or
+        if (-not $lockedNested -or $lockedNested.parent -ne 'root/مكتبة_جت' -or
             $lockedNested.source.path -notmatch ([regex]::Escape(".takween/packages/$gitCommit/nested"))) {
             throw 'The transitive path lock node is missing or not attached to the Git package.'
         }
