@@ -10,7 +10,8 @@
 4. Clean Safety
 5. Init Side Effects
 6. Installer Smoke (Windows)
-7. Typed Manifest + Path/Pinned-Git Dependencies + Lock Determinism
+7. Typed Manifest + Path/Pinned-Git/Local-Archive Dependencies + Lock Determinism
+8. SemVer + SHA-256 + Locked/Offline Resolution
 
 ## حالات أساسية
 
@@ -47,6 +48,12 @@
 - حزمة Git ذات path متعدية -> العقدتان تظهران مع parent صحيح في `takween-lock-v1`.
 - إزالة source Git بعد أول resolution -> rebuild/run ينجحان من cache وحده.
 - تشغيل resolver مرتين -> SHA-256 لبايتات `تكوين.قفل` لا يتغير ولا يحوي CRLF.
+- فهرس محلي بترتيب غير مصنف وإصدارات متوافقة/غير متوافقة -> يختار أعلى SemVer
+  مطابق حتميا، مع tie-break ثابت لـ build metadata المتساوية في precedence.
+- تعديل archive بعد القفل -> يرفض `--locked` SHA-256 ولا يبدل القفل.
+- تعديل البيان بعد القفل -> يرفض `--locked` القفل القديم ويحذف مرشح المقارنة.
+- إزالة أي مجال مطابق -> تعارض SemVer صريح.
+- محتوى cache معنون بـ SHA-256 ومصدر الفهرس بلا شبكة -> build/run ينجحان offline.
 - output يحوي مسافة و`&` -> يبنى ويعمل وينظف دون تفسير shell.
 
 ### Clean Safety
@@ -71,7 +78,8 @@
 
 يشغل `scripts/test_takween.ps1` بناء تكوين بمصرّف Baa محدد، ثم يتحقق من
 help/version وinit/check/build/rebuild/run/clean، وعقود JSON والكاش، وحدود argv،
-وبيان v1 واعتماديات path/Git والقفل الحتمي، ورفض manifest غير صالح والأعلام الحرة
+وبيان v1 واعتماديات path/Git/archive وSemVer وSHA-256 و`--locked` والقفل الحتمي،
+ورفض manifest غير صالح والأعلام الحرة
 ومسار clean الخطر. كما يبني Baa مزيفا لكل كود `compiler-cli-v1` من `1` إلى `5`
 ويثبت مروره كما هو عبر check/build/run/test:
 

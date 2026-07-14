@@ -7,6 +7,17 @@
 
 ### أضيف
 
+- محلل SemVer حتمي لإصدارات `major.minor.patch` وprerelease/build metadata، مع
+  exact و`^` و`~` والمقارنات ومجالات AND واختيار أعلى إصدار مطابق وتعارض صريح.
+- فهرس `takween-index-v1` محلي صريح عبر `TAKWEEN_PACKAGE_INDEX`، واختيار archive
+  دقيق مع تحقق SHA-256 واستهلاك شجرة محتوى مجهزة ومعنونة بالتجزئة بلا سجل عام.
+- تسجيل قيد الإصدار ومسار الفهرس والأرشيف وSHA-256 والاختيار الدقيق داخل
+  `takween-lock-v1`، مع رفع resolver إلى `0.2.0`.
+- خيار `--locked` لـ build/check/run/test يقارن الحل الحالي بالقفل حتميا ولا
+  ينشئ أو يستبدل القفل عند غيابه أو قدمه، ويحذف مرشح المقارنة المؤقت.
+- smoke لحالات SemVer exact/caret/tilde/range/prerelease/build metadata، وثبات
+  القفل، ورفض العبث بالأرشيف، وإعادة build/run offline من cache المحتوى المحلي.
+
 - `--إصدار/--version` مع فحص تطابق إصدار المصدر أثناء البناء.
 - اختيار صريح لمسار Baa وstdlib في `build_takween.ps1`.
 - runner آلي لـ help/version/init/build/run/clean وحالات الرفض الأساسية.

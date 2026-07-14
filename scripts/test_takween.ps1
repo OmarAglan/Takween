@@ -222,6 +222,27 @@ try {
             throw 'v1 path dependency sources were not included in the compiler build plan.'
         }
 
+        $v1LockPath = Join-Path $v1Root 'تكوين.قفل'
+        $v1LockHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $v1LockPath).Hash
+        $originalV1Manifest = Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $v1Root 'مشروع.تكوين')
+        Invoke-ExpectedSuccess $takween @('check', '--locked') 'matching locked path resolution' | Out-Null
+        if ((Get-FileHash -Algorithm SHA256 -LiteralPath $v1LockPath).Hash -ne $v1LockHash) {
+            throw '--locked changed the existing deterministic lock.'
+        }
+        $changedV1Manifest = $originalV1Manifest.Replace('الإصدار = "1.0.0"', 'الإصدار = "1.0.1"')
+        [IO.File]::WriteAllText((Join-Path $v1Root 'مشروع.تكوين'), $changedV1Manifest, $utf8NoBom)
+        $lockedMismatch = Invoke-ExpectedFailure $takween @('check', '--locked') 'stale locked path rejection'
+        if ($lockedMismatch -notmatch 'مقفل|locked') {
+            throw 'Stale lock rejection did not report the typed locked-mode diagnostic.'
+        }
+        if ((Get-FileHash -Algorithm SHA256 -LiteralPath $v1LockPath).Hash -ne $v1LockHash) {
+            throw 'Failed --locked verification replaced the existing lock.'
+        }
+        if (Test-Path -LiteralPath (Join-Path $v1Root '.takween/lock-candidate.json')) {
+            throw '--locked left its candidate lock behind.'
+        }
+        [IO.File]::WriteAllText((Join-Path $v1Root 'مشروع.تكوين'), $originalV1Manifest, $utf8NoBom)
+
         $v1Run = Invoke-ExpectedSuccess $takween @('run') 'v1 typed path dependency run'
         if ($v1Run -notmatch 'typed path dependency ok') {
             throw 'v1 path dependency executable did not run the dependency-backed behavior.'
@@ -232,7 +253,6 @@ try {
         }
 
         $nonHostTarget = @($targetInfo.targets | Where-Object { $_.name -ne $targetInfo.host_target })[0].name
-        $originalV1Manifest = Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $v1Root 'مشروع.تكوين')
         $crossTargetManifest = $originalV1Manifest.Replace(
             "[البناء]", "[البناء]`nالهدف = `"$nonHostTarget`"")
         [IO.File]::WriteAllText((Join-Path $v1Root 'مشروع.تكوين'), $crossTargetManifest, $utf8NoBom)
@@ -260,6 +280,165 @@ try {
         Invoke-ExpectedFailure $takween @('check') 'v1 unknown-key rejection' | Out-Null
     } finally {
         Pop-Location
+    }
+
+    $archiveRoot = Join-Path $tempRoot 'local-archive-index'
+    $archiveFiles = Join-Path $archiveRoot 'archives'
+    $archiveCache = Join-Path $archiveRoot 'sha256'
+    New-Item -ItemType Directory -Force $archiveFiles, $archiveCache | Out-Null
+    $indexRows = [Collections.Generic.List[string]]::new()
+    $archiveRecords = @{}
+    foreach ($candidate in @(
+        @{ Version = '2.0.0'; Value = '200' },
+        @{ Version = '1.0.0'; Value = '100' },
+        @{ Version = '1.1.0-alpha.1'; Value = '110' },
+        @{ Version = '1.2.0'; Value = '120' },
+        @{ Version = '1.2.0+build.1'; Value = '121' }
+    )) {
+        $archivePath = Join-Path $archiveFiles ("archive_lib-$($candidate.Version).tkw")
+        [IO.File]::WriteAllText($archivePath, "takween-archive-v1:$($candidate.Version)`n", $utf8NoBom)
+        $digest = (Get-FileHash -Algorithm SHA256 -LiteralPath $archivePath).Hash.ToLowerInvariant()
+        $contentRoot = Join-Path $archiveCache $digest
+        New-Item -ItemType Directory -Force (Join-Path $contentRoot 'src'), (Join-Path $contentRoot 'include') | Out-Null
+        $packageManifest = @"
+[المشروع]
+الاسم = "archive_lib"
+الإصدار = "$($candidate.Version)"
+
+[الأهداف.archive_lib]
+النوع = "مكتبة"
+المدخل = "src/lib.baa"
+مسارات_التضمين = ["include"]
+
+[البناء]
+المخرج = "build"
+النمط = "dev"
+
+[الأنماط.dev]
+التحسين = 1
+التحقق = خطأ
+"@
+        [IO.File]::WriteAllText((Join-Path $contentRoot 'مشروع.تكوين'), $packageManifest, $utf8NoBom)
+        [IO.File]::WriteAllText(
+            (Join-Path $contentRoot 'include/archive_lib.baahd'),
+            "صحيح قيمة_أرشيف().`n",
+            $utf8NoBom)
+        [IO.File]::WriteAllText(
+            (Join-Path $contentRoot 'src/lib.baa'),
+            "صحيح قيمة_أرشيف() { إرجع $($candidate.Value). }`n",
+            $utf8NoBom)
+        $indexRows.Add("archive_lib`t$($candidate.Version)`t$digest`t$archivePath`t$contentRoot")
+        $archiveRecords[$candidate.Version] = @{
+            Archive = $archivePath
+            Digest = $digest
+            Content = $contentRoot
+            Bytes = [IO.File]::ReadAllBytes($archivePath)
+        }
+    }
+    $indexPath = Join-Path $archiveRoot 'index.tsv'
+    [IO.File]::WriteAllText(
+        $indexPath,
+        "takween-index-v1`n" + (($indexRows -join "`n") + "`n"),
+        $utf8NoBom)
+
+    $archiveProject = Join-Path $tempRoot 'v1-archive-dependency'
+    New-Item -ItemType Directory -Force (Join-Path $archiveProject 'src') | Out-Null
+    $archiveProjectManifest = @'
+[المشروع]
+الاسم = "archive_app"
+الإصدار = "1.0.0"
+إصدار_باء = ">=0.6.0 <0.8.0"
+
+[الأهداف.archive_app]
+النوع = "تنفيذي"
+المدخل = "src/main.baa"
+
+[البناء]
+المخرج = "build"
+النمط = "dev"
+
+[الأنماط.dev]
+التحسين = 1
+التحقق = صواب
+
+[الاعتماديات.archive_lib]
+الإصدار = "^1.0.0"
+'@
+    [IO.File]::WriteAllText((Join-Path $archiveProject 'مشروع.تكوين'), $archiveProjectManifest, $utf8NoBom)
+    $archiveMain = @'
+#تضمين "archive_lib.baahd"
+
+صحيح الرئيسية() {
+    إذا (قيمة_أرشيف() != ١٢١) { إرجع ١. }
+    اطبع "semver archive dependency ok".
+    إرجع ٠.
+}
+'@
+    [IO.File]::WriteAllText((Join-Path $archiveProject 'src/main.baa'), $archiveMain, $utf8NoBom)
+
+    $oldPackageIndex = $env:TAKWEEN_PACKAGE_INDEX
+    $env:TAKWEEN_PACKAGE_INDEX = $indexPath
+    Push-Location $archiveProject
+    try {
+        Invoke-ExpectedSuccess $takween @('build') 'SemVer local archive build' | Out-Null
+        $archiveRun = Invoke-ExpectedSuccess $takween @('run', '--locked') 'locked offline archive run'
+        if ($archiveRun -notmatch 'semver archive dependency ok') {
+            throw 'The highest compatible local archive was not selected and linked.'
+        }
+        $archiveLockPath = Join-Path $archiveProject 'تكوين.قفل'
+        $archiveLockHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archiveLockPath).Hash
+        $archiveLock = Get-Content -Raw -Encoding utf8 -LiteralPath $archiveLockPath | ConvertFrom-Json
+        $archiveNode = @($archiveLock.packages | Where-Object { $_.source.kind -eq 'archive' })[0]
+        if (-not $archiveNode -or $archiveNode.version -ne '1.2.0+build.1' -or
+            $archiveNode.source.constraint -ne '^1.0.0' -or
+            $archiveNode.source.sha256 -ne $archiveRecords['1.2.0+build.1'].Digest -or
+            $archiveNode.source.index -ne $indexPath -or
+            $archiveNode.source.archive -ne $archiveRecords['1.2.0+build.1'].Archive) {
+            throw 'Archive lock node does not preserve the exact SemVer choice and immutable SHA-256 source.'
+        }
+        if ((Get-FileHash -Algorithm SHA256 -LiteralPath $archiveLockPath).Hash -ne $archiveLockHash) {
+            throw 'Locked offline archive resolution changed the lock bytes.'
+        }
+
+        [IO.File]::WriteAllBytes($archiveRecords['1.2.0+build.1'].Archive, [byte[]](1, 2, 3, 4))
+        $tamperFailure = Invoke-ExpectedFailure $takween @('check', '--locked') 'tampered archive rejection'
+        if ($tamperFailure -notmatch 'SHA-256') {
+            throw 'Tampered archive rejection did not identify the immutable hash contract.'
+        }
+        [IO.File]::WriteAllBytes($archiveRecords['1.2.0+build.1'].Archive, $archiveRecords['1.2.0+build.1'].Bytes)
+
+        foreach ($rangeCase in @(
+            @{ Constraint = '>=1.0.0 <2.0.0'; Expected = '1.2.0+build.1' },
+            @{ Constraint = '~1.0.0'; Expected = '1.0.0' },
+            @{ Constraint = '1.1.0-alpha.1'; Expected = '1.1.0-alpha.1' }
+        )) {
+            $rangeManifest = $archiveProjectManifest.Replace('^1.0.0', $rangeCase.Constraint)
+            [IO.File]::WriteAllText((Join-Path $archiveProject 'مشروع.تكوين'), $rangeManifest, $utf8NoBom)
+            Invoke-ExpectedSuccess $takween @('check') "SemVer range $($rangeCase.Constraint)" | Out-Null
+            $rangeLock = Get-Content -Raw -Encoding utf8 -LiteralPath $archiveLockPath | ConvertFrom-Json
+            $rangeNode = @($rangeLock.packages | Where-Object { $_.source.kind -eq 'archive' })[0]
+            if (-not $rangeNode -or $rangeNode.version -ne $rangeCase.Expected) {
+                throw "SemVer range $($rangeCase.Constraint) selected '$($rangeNode.version)' instead of '$($rangeCase.Expected)'."
+            }
+        }
+
+        $incompatibleManifest = $archiveProjectManifest.Replace('^1.0.0', '<1.0.0')
+        [IO.File]::WriteAllText((Join-Path $archiveProject 'مشروع.تكوين'), $incompatibleManifest, $utf8NoBom)
+        $conflictFailure = Invoke-ExpectedFailure $takween @('check') 'SemVer conflict rejection'
+        if ($conflictFailure -notmatch 'إصدار|version') {
+            throw 'SemVer conflict did not produce an explicit resolution diagnostic.'
+        }
+
+        $invalidRangeManifest = $archiveProjectManifest.Replace('^1.0.0', '1.x')
+        [IO.File]::WriteAllText((Join-Path $archiveProject 'مشروع.تكوين'), $invalidRangeManifest, $utf8NoBom)
+        $invalidRangeFailure = Invoke-ExpectedFailure $takween @('check') 'invalid SemVer range rejection'
+        if ($invalidRangeFailure -notmatch 'قيد|Semantic') {
+            throw 'Invalid SemVer range did not fail at the typed manifest boundary.'
+        }
+        [IO.File]::WriteAllText((Join-Path $archiveProject 'مشروع.تكوين'), $archiveProjectManifest, $utf8NoBom)
+    } finally {
+        Pop-Location
+        $env:TAKWEEN_PACKAGE_INDEX = $oldPackageIndex
     }
 
     $gitProgram = (Get-Command git -ErrorAction Stop).Source
@@ -343,7 +522,7 @@ commit = "$gitCommit"
         $firstLockHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $lockPath).Hash
         $lockData = Get-Content -Raw -Encoding utf8 -LiteralPath $lockPath | ConvertFrom-Json
         if ($lockData.schema_version -ne 'takween-lock-v1' -or
-            $lockData.resolver_version -ne '0.1.0' -or
+            $lockData.resolver_version -ne '0.2.0' -or
             $lockData.baa.target -ne $targetInfo.selected_target) {
             throw 'تكوين.قفل metadata does not match the stable lock/target contracts.'
         }

@@ -1,6 +1,8 @@
 # معمارية الحزم في تكوين
 
-> **الحالة:** اعتماديات path/Git وقفل `takween-lock-v1` foundation منفذة؛ لا يوجد سجل عام في Takween 0.1.
+> **الحالة:** اعتماديات path/Git واعتماديات الإصدار من فهرس محلي، وSemVer،
+> وSHA-256، وقفل `takween-lock-v1` مع `--locked` منفذة كأساس offline؛ لا يوجد
+> تنزيل أو فك archives أو سجل عام في Takween 0.1.
 
 ## حدود الملكية
 
@@ -18,9 +20,10 @@
    المتعدية في بيانات v1 والقفل.
 2. اعتماديات Git مثبتة بـ commit، لا branch متحرك. **منفذ الآن** بالجلب المهيكل
    وcheckout معنون بالـ commit وإعادة الاستخدام دون المصدر.
-3. أساس `تكوين.قفل` الحتمي منفذ لـ path/Git؛ resolver Semantic Versioning وhash
-   archive لم ينفذا بعد.
-4. archive محلي وvendor/offline verification.
+3. أساس `تكوين.قفل` الحتمي منفذ لـ path/Git/archive، مع اختيار SemVer حتمي
+   وSHA-256 وتحقق `--locked` غير معدّل.
+4. فهرس archive محلي ومحتوى cache معنون بالتجزئة منفذان؛ فك archive وvendor
+   وأمر offline مستقل لاحقا.
 5. عميل سجل تجريبي.
 6. نشر وسجل عام بعد ثبات العقود.
 
@@ -31,29 +34,58 @@
 - `schema_version = takween-lock-v1` وإصدار resolver؛
 - اسم/إصدار المشروع وهدف Baa المختار؛
 - alias واسم/إصدار كل حزمة وعلاقة `parent` الانتقالية؛
-- المسار المطبع، أو Git URL وcommit الدقيق؛
+- المسار المطبع، أو Git URL وcommit الدقيق، أو قيد الإصدار والاختيار الدقيق
+  ومسار الفهرس والأرشيف وتجزئة SHA-256؛
 - ترتيب canonical للعقد قبل الكتابة، بحيث تعطي الإعادة نفس البايتات.
 
-حقل قيد Baa محجوز حاليا بقيمة فارغة. يضاف اختيار SemVer وSHA-256 لمحتوى archive
-عند تنفيذ registry/archive؛ commit هو هوية محتوى cache في مرحلة Git الحالية.
+حقل قيد Baa محجوز حاليا بقيمة فارغة. commit هو هوية cache لاعتماد Git، وSHA-256
+هو هوية archive. في وضع `--locked` يكتب resolver مرشحا مؤقتا، يقارنه بايتيا
+بالقفل الموجود، ثم يحذفه؛ لا يستبدل `تكوين.قفل` عند التطابق أو الاختلاف.
 
 التطبيقات وworkspaces تلتزم ملف القفل. المكتبات تنشر مجال الإصدارات ولا تنشر
 اختيار المستهلك النهائي، مع استخدام lock محلي لاختبارات maintainer.
 
+## SemVer والفهرس المحلي
+
+اعتمادية الإصدار في البيان تكتب مثلا `الإصدار = "^1.2.0"`. يدعم resolver
+إصدارات كاملة `major.minor.patch` مع prerelease/build metadata، ضمن أعداد core من
+`0` إلى `2147483647`. القيود المدعومة هي exact و`=` و`^` و`~` و`<` و`<=` و`>`
+و`>=` و`*`؛ تفصل المقارنات المتقاطعة بمسافة وتعني AND. يختار resolver أعلى
+precedence مطابق، ثم يستخدم النص الكامل tie-break ثابتا عندما تختلف build metadata
+ولا تغير precedence.
+
+لا يكتشف تكوين سجلا على الشبكة. يحدد المستخدم ملفا محليا صريحا في
+`TAKWEEN_PACKAGE_INDEX`. ويكون الملف UTF-8/LF مفصولا بعلامة tab:
+
+```text
+takween-index-v1
+name<TAB>version<TAB>sha256<TAB>archive_path<TAB>content_path
+```
+
+يجب أن يكون `sha256` lowercase من 64 خانة، وأن يقع `content_path` في شجرة
+مُحضرة مسبقا عنوانها يتضمن التجزئة. يتحقق تكوين من بايتات `archive_path` في كل
+حل، ثم يقرأ بيان v1 من المحتوى ويتأكد أن الاسم والإصدار يطابقان اختيار الفهرس.
+هذه واجهة cache محلية قابلة للاختبار offline، وليست صيغة archive نهائية ولا
+downloader/extractor أو registry client.
+
 ## الهوية العربية والأمان
+
+المطبق الآن: لا lifecycle scripts ضمنية، وGit بلا shell مع commit مثبت، وarchive
+محلي يتحقق بـ SHA-256 قبل استهلاك محتواه المجهز. السياسات التالية تخص الصيغة
+والسجل المستقبلي ما لم يذكر أنها منفذة:
 
 - تطبع الأسماء إلى Unicode NFC قبل المقارنة والتخزين.
 - تمنع الحركات والتطويل وbidi controls في هوية الحزمة، مع السماح بها في الوصف.
 - يمنع خلط العربية واللاتينية داخل مقطع اسم واحد لتقليل أسماء الانتحال.
 - namespace يفصل المالك عن الحزمة، والسجل يحتفظ بمعرف داخلي ASCII ثابت.
 - الإصدار المنشور immutable؛ السحب يضيف تحذيرا ولا يعيد استخدام الرقم.
-- لا توجد lifecycle scripts ضمنية في v1.
+- لا توجد lifecycle scripts ضمنية في v1. **منفذ.**
 - Git لا يمر عبر shell، ويعطل hooks أثناء checkout، ولا يسمح إلا ببروتوكولات
   `file/https/ssh/git`، ويكتب symlinks كنصوص عادية عبر `core.symlinks=false`.
 - cache Git في `.takween/packages/<commit>`؛ يعاد فرض checkout الدقيق وتنظيف
   الشجرة قبل الاستخدام، ثم يتحقق resolver من `HEAD^{commit}`.
-- الجلب يتحقق من TLS وhash القفل قبل فك archive، ويفك داخل جذر مؤقت يمنع
-  absolute paths و`..` وsymlink escape.
+- الجلب المستقبلي يتحقق من TLS وhash القفل قبل فك archive، ويفك داخل جذر مؤقت
+  يمنع absolute paths و`..` وsymlink escape. **غير منفذ بعد.**
 
 ## أوامر CLI المخططة
 
@@ -69,3 +101,7 @@
 
 aliases الإنجليزية (`add`, `remove`, `update`, `install`, `verify`, `publish`)
 مقبولة في CLI فقط.
+
+هذه أوامر مخططة؛ التحقق المنفذ حاليا يضاف إلى `build/check/run/test` بواسطة
+`--locked`. استخدم هذا alias الإنجليزي في الأتمتة العابرة للمنصات إلى أن يوفر
+Baa مدخل `argv` واسع/UTF-8 للبرامج الأصلية على Windows.
