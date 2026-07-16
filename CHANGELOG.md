@@ -7,6 +7,11 @@
 
 ### أضيف
 
+- جذور `.baa` و`.نظم` مختلطة في الصيغتين، مع رفض أي امتداد مصدر آخر.
+- حقل v1 عربي typed باسم `المجمع` وقيمتي `نظم/غاز`; يمرر اختيار نظم إلى Baa
+  ويستخدم المشغل العربي `نظم` على `PATH` بلا shell.
+- استهلاك `target-info-v1.capabilities.nazm_source` وتسجيل `مصدر_نظم` في
+  `takween-lock-v1`، مع smoke بناء/تشغيل ووحدات manifest مختلطة.
 - محلل SemVer حتمي لإصدارات `major.minor.patch` وprerelease/build metadata، مع
   exact و`^` و`~` والمقارنات ومجالات AND واختيار أعلى إصدار مطابق وتعارض صريح.
 - فهرس `takween-index-v1` محلي صريح عبر `TAKWEEN_PACKAGE_INDEX`، واختيار archive

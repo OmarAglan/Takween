@@ -1,7 +1,10 @@
 ﻿[CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [string]$BaaPath
+    [string]$BaaPath,
+
+    [Parameter(Mandatory = $true)]
+    [string]$NazmPath
 )
 
 $ErrorActionPreference = 'Stop'
@@ -11,16 +14,30 @@ $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ("takween-tests-" + [guid]::New
 $utf8NoBom = New-Object Text.UTF8Encoding($false)
 
 function Invoke-ExpectedSuccess([string]$Program, [string[]]$Arguments, [string]$Label) {
-    $output = & $Program @Arguments 2>&1 | Out-String
-    if ($LASTEXITCODE -ne 0) {
-        throw "$Label failed with exit code $LASTEXITCODE`n$output"
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $output = & $Program @Arguments 2>&1 | Out-String
+        $actualExitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
+    if ($actualExitCode -ne 0) {
+        throw "$Label failed with exit code $actualExitCode`n$output"
     }
     return $output
 }
 
 function Invoke-ExpectedFailure([string]$Program, [string[]]$Arguments, [string]$Label) {
-    $output = & $Program @Arguments 2>&1 | Out-String
-    if ($LASTEXITCODE -eq 0) {
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $output = & $Program @Arguments 2>&1 | Out-String
+        $actualExitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
+    if ($actualExitCode -eq 0) {
         throw "$Label unexpectedly succeeded.`n$output"
     }
     return $output
@@ -32,8 +49,14 @@ function Invoke-ExpectedExitCode(
     [int]$ExpectedExitCode,
     [string]$Label
 ) {
-    $output = & $Program @Arguments 2>&1 | Out-String
-    $actualExitCode = $LASTEXITCODE
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $output = & $Program @Arguments 2>&1 | Out-String
+        $actualExitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
     if ($actualExitCode -ne $ExpectedExitCode) {
         throw "$Label returned $actualExitCode instead of $ExpectedExitCode.`n$output"
     }
@@ -84,6 +107,13 @@ function Get-TreeReceipt([string]$RootPath) {
 
 $resolvedBaa = (Get-Command $BaaPath -ErrorAction Stop).Source
 $baaDirectory = Split-Path -Parent $resolvedBaa
+$resolvedNazm = (Get-Command $NazmPath -ErrorAction Stop).Source
+$nazmDirectory = Split-Path -Parent $resolvedNazm
+$nazmSuffix = [IO.Path]::GetExtension($resolvedNazm)
+$arabicNazm = Join-Path $nazmDirectory ("نظم" + $nazmSuffix)
+if (-not (Test-Path -LiteralPath $arabicNazm)) {
+    throw "The selected Nazm build does not provide the primary Arabic launcher: $arabicNazm"
+}
 $oldPath = $env:PATH
 $baaStdlib = $null
 $probe = Get-Item -LiteralPath $baaDirectory
@@ -100,8 +130,9 @@ if (-not $baaStdlib) {
 }
 
 try {
-    $env:PATH = "$baaDirectory$([IO.Path]::PathSeparator)$oldPath"
+    $env:PATH = "$baaDirectory$([IO.Path]::PathSeparator)$nazmDirectory$([IO.Path]::PathSeparator)$oldPath"
     Write-Output "Testing with Baa: $resolvedBaa"
+    Write-Output "Testing with Nazm: $arabicNazm"
     & $resolvedBaa --version
     if ($LASTEXITCODE -ne 0) {
         throw "Unable to execute the selected Baa compiler."
@@ -320,6 +351,53 @@ try {
     Push-Location $invalidV1Root
     try {
         Invoke-ExpectedFailure $takween @('check') 'v1 unknown-key rejection' | Out-Null
+    } finally {
+        Pop-Location
+    }
+
+    $nazmRoot = Join-Path $tempRoot 'v1-nazm-mixed'
+    New-Item -ItemType Directory -Force $nazmRoot | Out-Null
+    Get-ChildItem -Force -LiteralPath (Join-Path $root 'tests/fixtures/v1_nazm_mixed') |
+        Copy-Item -Destination $nazmRoot -Recurse -Force
+    Push-Location $nazmRoot
+    try {
+        Invoke-ExpectedSuccess $takween @('build') 'typed Arabic Nazm assembler build' | Out-Null
+        $nazmManifestPath = Join-Path $nazmRoot 'build/build-manifest.json'
+        $nazmManifest = Get-Content -Raw -Encoding utf8 -LiteralPath $nazmManifestPath |
+            ConvertFrom-Json
+        if ($nazmManifest.assembler -ne 'nazm') {
+            throw 'Takween did not map المجمع = "نظم" to the Baa Nazm assembler policy.'
+        }
+        $nazmUnits = @($nazmManifest.units)
+        if ($nazmUnits.Count -ne 2 -or
+            @($nazmUnits | Where-Object { $_.assembler -ne 'nazm' }).Count -ne 0 -or
+            @($nazmUnits | Where-Object { $_.source_kind -eq 'baa' }).Count -ne 1 -or
+            @($nazmUnits | Where-Object { $_.source_kind -eq 'nazm' }).Count -ne 1) {
+            throw 'Mixed Baa/Nazm roots did not produce the expected per-unit assembler receipts.'
+        }
+        $nazmLock = Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $nazmRoot 'تكوين.قفل') |
+            ConvertFrom-Json
+        if (@($nazmLock.baa.capabilities) -notcontains 'مصدر_نظم') {
+            throw 'The lock did not preserve the target-info-v1 Nazm source capability.'
+        }
+
+        Invoke-ExpectedSuccess $takween @('run') 'typed Arabic Nazm assembler run' | Out-Null
+        $nazmCheck = Invoke-ExpectedExitCode $takween @('check') 3 'direct Nazm check contract'
+        if ($nazmCheck -notmatch '\.نظم') {
+            throw 'Direct Nazm check rejection did not identify the unsupported source kind.'
+        }
+
+        $nazmProjectPath = Join-Path $nazmRoot 'مشروع.تكوين'
+        $nazmProject = Get-Content -Raw -Encoding utf8 -LiteralPath $nazmProjectPath
+        [IO.File]::WriteAllText(
+            $nazmProjectPath,
+            $nazmProject.Replace('src/helper.نظم', 'src/helper.s'),
+            $utf8NoBom
+        )
+        Invoke-ExpectedExitCode $takween @('build') 1 'unsupported source extension rejection' | Out-Null
+        [IO.File]::WriteAllText($nazmProjectPath, $nazmProject, $utf8NoBom)
+
+        Invoke-ExpectedSuccess $takween @('clean') 'typed Arabic Nazm clean' | Out-Null
     } finally {
         Pop-Location
     }

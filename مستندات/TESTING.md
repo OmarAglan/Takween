@@ -21,7 +21,7 @@
 - مفتاح غير مدعوم -> فشل.
 - حقل إلزامي مفقود -> فشل.
 - `التحسين` خارج المجال -> فشل.
-- `ملفات` فارغة أو بلا `.baa` -> فشل.
+- `ملفات` فارغة أو بعنصر لا ينتهي بـ`.baa` أو `.نظم` -> فشل.
 
 ### CLI
 - أمر عربي صحيح -> الدالة الصحيحة تُستدعى.
@@ -43,6 +43,9 @@
 - القيم quoted/int/bool/string-array والأقسام المعروفة -> نجاح.
 - مفتاح/قسم/نوع قيمة مجهول -> فشل واضح.
 - أهداف متعددة + مصادر متعددة + include paths -> يختار الهدف المطلوب وتدخل ملفاته خطة Baa.
+- هدف مختلط `.baa`/`.نظم` مع `المجمع = "نظم"` -> يبني ويعمل عبر الأمر العربي
+  `نظم` على `PATH`، ويثبت build-manifest وحدتي `baa` و`nazm` ومجمع `nazm`.
+- `check` للهدف المختلط -> يحافظ على كود غير مدعوم `3` إلى أن يوجد JSON تشخيصي لنظم.
 - اعتمادية `المسار` ذات بيان v1 -> تدخل مصادرها وتضميناتها خطة check/build/run.
 - اعتمادية Git بـ commit دقيق -> checkout معنون بالـ commit وتدخل مصادرها الخطة.
 - Git branch/tag أو خلط path/Git -> رفض manifest قبل التنفيذ.
@@ -96,7 +99,9 @@ help/version وinit/check/build/rebuild/run/clean، وعقود JSON والكاش
 ويثبت مروره كما هو عبر check/build/run/test:
 
 ```powershell
-.\scripts\test_takween.ps1 -BaaPath ..\Baa\build\presets\windows-verify\baa.exe
+.\scripts\test_takween.ps1 `
+  -BaaPath ..\Baa\build\presets\windows-verify\baa.exe `
+  -NazmPath ..\Nazm\build\eco-verify\nazm.exe
 ```
 
 لا يعد الاختبار ناجحا إذا استخدم Baa مختلفا بصمت؛ يطبع runner المسار والإصدار.

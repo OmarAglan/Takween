@@ -27,6 +27,13 @@ jobs:
           ref: master
           path: Baa
 
+      - name: Check out Nazm
+        uses: actions/checkout@v5
+        with:
+          repository: OmarAglan/Nazm
+          ref: main
+          path: Nazm
+
       - name: Add Windows MinGW toolchain
         if: runner.os == 'Windows'
         shell: pwsh
@@ -45,12 +52,26 @@ jobs:
         shell: bash
         run: cmake -S Baa -B Baa/build-eco -DCMAKE_BUILD_TYPE=Release
 
+      - name: Configure Nazm on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: cmake -S Nazm -B Nazm/build-eco -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+
+      - name: Configure Nazm on Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        run: cmake -S Nazm -B Nazm/build-eco -DCMAKE_BUILD_TYPE=Release
+
       - name: Build Baa
         run: cmake --build Baa/build-eco --parallel 2
+
+      - name: Build Nazm
+        run: cmake --build Nazm/build-eco --parallel 2
 
       - name: Run the shared Takween smoke suite
         shell: pwsh
         run: |
           $suffix = if ($IsWindows) { '.exe' } else { '' }
           $baa = Join-Path $env:GITHUB_WORKSPACE ("Baa/build-eco/baa" + $suffix)
-          ./Takween/scripts/test_takween.ps1 -BaaPath $baa
+          $nazm = Join-Path $env:GITHUB_WORKSPACE ("Nazm/build-eco/nazm" + $suffix)
+          ./Takween/scripts/test_takween.ps1 -BaaPath $baa -NazmPath $nazm
