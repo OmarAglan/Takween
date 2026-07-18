@@ -143,6 +143,13 @@ help/version وinit/check/build/rebuild/run/clean/plan، وعقود JSON وال�
 dependency-first، ودمج مصادر المكتبات انتقائيا، وكشف الدورة بمسار كامل، وهويات
 الأهداف العربية فقط، وstress من 200 process لعقد `takween-targets-v1`.
 
+إيصال الأنماط typed رقم
+[29642476532](https://github.com/OmarAglan/Takween/actions/runs/29642476532)
+بتاريخ 2026-07-18 نجح على `windows-latest` و`ubuntu-latest` عند commit
+`8b254861e26a9ae643723834292118a5816a40f8`. شمل `تطوير/إصدار`، وoverride
+العربي والتوافقي، والنمط المخصص، ورفض الهوية/التكرار/التركيب غير الصالح، وملكية
+`profile` داخل `takween-build-plan-v1`.
+
 ## سيناريو المثبت (يدوي)
 1. شغّل `scripts\build_installer.ps1`.
 2. ثبّت النسخة الناتجة.
