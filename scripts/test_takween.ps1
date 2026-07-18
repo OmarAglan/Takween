@@ -243,7 +243,7 @@ try {
             $firstCacheData.compiler_version -ne [string]$targetInfo.compiler_version -or
             $firstCacheData.baa_target -ne [string]$targetInfo.selected_target -or
             $firstCacheData.units -lt 1 -or
-            -not $firstCacheData.cache.reusable -or
+            $firstCacheData.cache.reusable -or
             $firstCacheData.cache.hit -or
             -not $firstCacheData.link_executed -or
             $firstCacheData.key -notmatch '^[0-9a-f]{64}$') {
@@ -277,15 +277,15 @@ try {
         Invoke-ExpectedSuccess $takween @('بناء') 'Arabic incremental rebuild workflow' | Out-Null
         $secondBuildData = Get-Content -Raw -Encoding utf8 -LiteralPath $buildManifest | ConvertFrom-Json
         $cacheHits = @($secondBuildData.units | Where-Object { $_.cache.hit })
-        if ($cacheHits.Count -lt 1) {
-            throw 'incremental rebuild did not report a cache hit.'
+        if ($cacheHits.Count -ne 0) {
+            throw 'Default Nazm rebuild reported an unsupported incremental cache hit.'
         }
         $secondCacheData = Get-Content -Raw -Encoding utf8 -LiteralPath $contentCachePath |
             ConvertFrom-Json
         if ($secondCacheData.key -ne $firstCacheData.key -or
-            -not $secondCacheData.cache.hit -or
-            -not $secondCacheData.cache.reusable) {
-            throw 'unchanged rebuild did not preserve the content key and aggregate cache hit.'
+            $secondCacheData.cache.hit -or
+            $secondCacheData.cache.reusable) {
+            throw 'Default Nazm rebuild did not preserve identity with cache reuse disabled.'
         }
         if ((Get-FileHash -Algorithm SHA256 -LiteralPath $identityReceipt).Hash -ne
                 $identityHash -or
@@ -691,8 +691,9 @@ try {
             throw 'Archive lock node does not preserve the exact SemVer choice and immutable SHA-256 source.'
         }
         if ($archiveLock.baa.constraint -ne '>=0.6.0 <0.8.0' -or
-            @($archiveLock.baa.capabilities).Count -ne 1 -or
-            @($archiveLock.baa.capabilities)[0] -ne 'تجميع') {
+            @($archiveLock.baa.capabilities).Count -ne 2 -or
+            @($archiveLock.baa.capabilities) -notcontains 'تجميع' -or
+            @($archiveLock.baa.capabilities) -notcontains 'مصدر_نظم') {
             throw 'Lockfile does not preserve the Baa version and target capability constraints.'
         }
         if ((Get-FileHash -Algorithm SHA256 -LiteralPath $archiveLockPath).Hash -ne $archiveLockHash) {
@@ -1086,7 +1087,7 @@ commit = "$gitCommit"
             $planData.profile.optimization -ne 1 -or
             -not $planData.profile.verify -or
             $planData.argv[0] -ne 'baa' -or
-            $planData.argv -notcontains '--assembler=gas' -or
+            $planData.argv -notcontains '--assembler=nazm' -or
             $planData.argv -notcontains '-O1' -or
             $planData.argv -notcontains '--verify') {
             throw 'Build plan does not satisfy takween-build-plan-v1 or own its تطوير profile.'
@@ -1095,6 +1096,17 @@ commit = "$gitCommit"
             @($planData.argv | Where-Object { $_ -like '*src/library.baa' }).Count -ne 1) {
             throw 'Build plan did not flatten the selected target DAG in dependency-first order.'
         }
+        $gasManifest = $multiManifest.Replace(
+            '[البناء]',
+            "[البناء]`nالمجمع = `"غاز`"")
+        [IO.File]::WriteAllText($multiManifestPath, $gasManifest, $utf8NoBom)
+        $gasPlan = Invoke-ExpectedSuccess $takween @('خطة', '--جسون', 'تطبيق') `
+            'explicit GAS rollback plan' | ConvertFrom-Json
+        if ($gasPlan.argv -notcontains '--assembler=gas' -or
+            $gasPlan.argv -contains '--assembler=nazm') {
+            throw 'Explicit المجمع = "غاز" did not override the Nazm production default.'
+        }
+        [IO.File]::WriteAllText($multiManifestPath, $multiManifest, $utf8NoBom)
         $releasePlanText = Invoke-ExpectedSuccess $takween `
             @('خطة', '--جسون', '--نمط', 'إصدار', 'تطبيق') 'Arabic release profile override'
         $releaseAliasText = Invoke-ExpectedSuccess $takween `
