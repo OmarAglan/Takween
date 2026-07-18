@@ -382,8 +382,8 @@ try {
             $nazmPlan.argv -notcontains '--assembler=nazm') {
             throw 'Nazm manifest selection was not preserved in the deterministic build plan.'
         }
-        if (Test-Path -LiteralPath (Join-Path $nazmRoot ("build/nazm_app" + $hostSuffix))) {
-            throw 'Nazm planning executed the compiler instead of returning an inert plan.'
+        if (Test-Path -LiteralPath (Join-Path $nazmRoot 'build')) {
+            throw 'Nazm planning created the output directory instead of returning an inert plan.'
         }
         Invoke-ExpectedSuccess $takween @('build') 'typed Arabic Nazm assembler build' | Out-Null
         $nazmManifestPath = Join-Path $nazmRoot 'build/build-manifest.json'
@@ -627,7 +627,9 @@ try {
         [IO.File]::WriteAllText((Join-Path $archiveProject 'مشروع.تكوين'), $invalidTargetManifest, $utf8NoBom)
         Invoke-ExpectedExitCode $takween @('check') 3 'target constraint exit contract' | Out-Null
 
-        $latinIdentityManifest = $archiveProjectManifest.Replace('تطبيق_أرشيف', 'archive_app')
+        $latinIdentityManifest = $archiveProjectManifest.Replace(
+            'الاسم = "تطبيق_أرشيف"',
+            'الاسم = "archive_app"')
         [IO.File]::WriteAllText((Join-Path $archiveProject 'مشروع.تكوين'), $latinIdentityManifest, $utf8NoBom)
         $latinIdentityFailure = Invoke-ExpectedExitCode $takween @('check') 3 'Latin package identity rejection'
         if ($latinIdentityFailure -notmatch 'اسما عربيا فقط') {
@@ -823,12 +825,53 @@ commit = "$gitCommit"
         Pop-Location
     }
 
+    $cycleRoot = Join-Path $tempRoot 'v1-target-cycle'
+    New-Item -ItemType Directory -Force $cycleRoot | Out-Null
+    Get-ChildItem -Force -LiteralPath (Join-Path $root 'tests/fixtures/v1_target_cycle') |
+        Copy-Item -Destination $cycleRoot -Recurse -Force
+    Push-Location $cycleRoot
+    try {
+        $cycleFailure = Invoke-ExpectedExitCode $takween @('خطة', '--جسون', 'تطبيق') 1 `
+            'target dependency cycle'
+        if ($cycleFailure -notmatch 'ألف\s*->\s*باء\s*->\s*جيم\s*->\s*ألف') {
+            throw 'Target cycle diagnostic did not include the complete deterministic cycle path.'
+        }
+        $cycleManifestPath = Join-Path $cycleRoot 'مشروع.تكوين'
+        $cycleManifest = Get-Content -Raw -Encoding utf8 -LiteralPath $cycleManifestPath
+        $unknownManifest = $cycleManifest.Replace('يعتمد_على = ["ألف"]', 'يعتمد_على = ["مفقود"]')
+        [IO.File]::WriteAllText($cycleManifestPath, $unknownManifest, $utf8NoBom)
+        $unknownFailure = Invoke-ExpectedExitCode $takween @('خطة', '--جسون', 'تطبيق') 1 `
+            'missing target dependency'
+        if ($unknownFailure -notmatch 'مفقود') {
+            throw 'Missing target dependency diagnostic did not name the missing Arabic target.'
+        }
+    } finally {
+        Pop-Location
+    }
+
     $multiRoot = Join-Path $tempRoot 'v1-multi-target'
     New-Item -ItemType Directory -Force $multiRoot | Out-Null
     Get-ChildItem -Force -LiteralPath (Join-Path $root 'tests/fixtures/v1_multi_target') |
         Copy-Item -Destination $multiRoot -Recurse -Force
     Push-Location $multiRoot
     try {
+        $multiManifestPath = Join-Path $multiRoot 'مشروع.تكوين'
+        $multiManifest = Get-Content -Raw -Encoding utf8 -LiteralPath $multiManifestPath
+        $latinTargetManifest = $multiManifest.Replace('[الأهداف.تطبيق]', '[الأهداف.app]')
+        [IO.File]::WriteAllText($multiManifestPath, $latinTargetManifest, $utf8NoBom)
+        Invoke-ExpectedExitCode $takween @('خطة', '--جسون', 'app') 1 `
+            'Latin target identity rejection' | Out-Null
+        $nonLibraryManifest = $multiManifest.Replace(
+            'يعتمد_على = ["مساعدة"]',
+            'يعتمد_على = ["اختبار_ب"]')
+        [IO.File]::WriteAllText($multiManifestPath, $nonLibraryManifest, $utf8NoBom)
+        $nonLibraryFailure = Invoke-ExpectedExitCode $takween @('خطة', '--جسون', 'تطبيق') 1 `
+            'non-library target dependency'
+        if ($nonLibraryFailure -notmatch 'مكتبة') {
+            throw 'Non-library target dependency rejection did not explain the library-only edge rule.'
+        }
+        [IO.File]::WriteAllText($multiManifestPath, $multiManifest, $utf8NoBom)
+
         $targetJson = Invoke-ExpectedSuccess $takween @('أهداف', '--جسون') 'Arabic target status contract'
         $targetJsonAlias = Invoke-ExpectedSuccess $takween @('targets', '--json') 'target status compatibility contract'
         if ($targetJson.Trim() -cne $targetJsonAlias.Trim()) {
@@ -843,10 +886,21 @@ commit = "$gitCommit"
         if ($tests.Count -ne 2 -or $library.Count -ne 1 -or $library[0].buildable) {
             throw 'Target status kinds/capabilities are inconsistent.'
         }
-
-        Invoke-ExpectedExitCode $takween @('plan', 'app') 2 'plan JSON requirement' | Out-Null
-        $firstPlanText = Invoke-ExpectedSuccess $takween @('خطة', '--جسون', 'app') 'Arabic build plan contract'
-        $secondPlanText = Invoke-ExpectedSuccess $takween @('plan', 'app', '--json') 'deterministic build plan contract'
+        if (@($targetData.targets | Where-Object { $_.name -match '[A-Za-z]' }).Count -ne 0) {
+            throw 'Target identities are not Arabic-only.'
+        }
+        foreach ($iteration in 1..200) {
+            $stressJson = Invoke-ExpectedSuccess $takween @('أهداف', '--جسون') `
+                "target status ownership stress iteration $iteration"
+            $stressData = $stressJson | ConvertFrom-Json
+            if ($stressData.schema_version -ne 'takween-targets-v1' -or
+                @($stressData.targets).Count -ne 4) {
+                throw "Target status ownership stress returned an invalid contract at iteration $iteration."
+            }
+        }
+        Invoke-ExpectedExitCode $takween @('plan', 'تطبيق') 2 'plan JSON requirement' | Out-Null
+        $firstPlanText = Invoke-ExpectedSuccess $takween @('خطة', '--جسون', 'تطبيق') 'Arabic build plan contract'
+        $secondPlanText = Invoke-ExpectedSuccess $takween @('plan', 'تطبيق', '--json') 'deterministic build plan contract'
         if ($firstPlanText.Trim() -cne $secondPlanText.Trim()) {
             throw 'Repeated build planning did not produce byte-identical JSON.'
         }
@@ -854,20 +908,24 @@ commit = "$gitCommit"
         if ($planData.schema_version -ne 'takween-build-plan-v1' -or
             $planData.operation -ne 'build' -or
             $planData.project -ne 'متعدد' -or
-            $planData.target -ne 'app' -or
+            $planData.target -ne 'تطبيق' -or
             $planData.argv[0] -ne 'baa' -or
             $planData.argv -notcontains '--assembler=gas') {
             throw 'Build plan does not satisfy takween-build-plan-v1 or pin the production assembler.'
         }
-        if (Test-Path -LiteralPath (Join-Path $multiRoot ("build/app" + $hostSuffix))) {
-            throw 'Planning executed the compiler instead of returning an inert plan.'
+        if ((@($planData.target_order) -join '|') -ne 'مساعدة|تطبيق' -or
+            @($planData.argv | Where-Object { $_ -like '*src/library.baa' }).Count -ne 1) {
+            throw 'Build plan did not flatten the selected target DAG in dependency-first order.'
+        }
+        if (Test-Path -LiteralPath (Join-Path $multiRoot 'build')) {
+            throw 'Planning created the output directory instead of returning an inert plan.'
         }
 
-        Invoke-ExpectedSuccess $takween @('build', 'app') 'selected executable build' | Out-Null
-        $appRun = Invoke-ExpectedSuccess $takween @('run', 'app') 'selected executable run'
+        Invoke-ExpectedSuccess $takween @('build', 'تطبيق') 'selected executable build' | Out-Null
+        $appRun = Invoke-ExpectedSuccess $takween @('run', 'تطبيق') 'selected executable run'
         if ($appRun -notmatch 'multi target app ok') { throw 'Selected executable did not run.' }
 
-        $oneTest = Invoke-ExpectedSuccess $takween @('test', 'test_a') 'selected test target'
+        $oneTest = Invoke-ExpectedSuccess $takween @('test', 'اختبار_أ') 'selected test target'
         if ($oneTest -notmatch 'test target a ok' -or $oneTest -match 'test target b ok') {
             throw 'Selected test command did not isolate the requested target.'
         }
@@ -875,19 +933,19 @@ commit = "$gitCommit"
         if ($allTests -notmatch 'test target a ok' -or $allTests -notmatch 'test target b ok') {
             throw 'Test command did not run every test target.'
         }
-        Invoke-ExpectedFailure $takween @('build', 'missing') 'missing target rejection' | Out-Null
-        Invoke-ExpectedExitCode $takween @('build', 'helper') 3 'unsupported library target' | Out-Null
-        Invoke-ExpectedExitCode $takween @('test', 'missing') 3 'missing test target' | Out-Null
+        Invoke-ExpectedFailure $takween @('build', 'مفقود') 'missing target rejection' | Out-Null
+        Invoke-ExpectedExitCode $takween @('build', 'مساعدة') 3 'unsupported library target' | Out-Null
+        Invoke-ExpectedExitCode $takween @('test', 'مفقود') 3 'missing test target' | Out-Null
 
-        $fakeBin = Join-Path $multiRoot 'fake-baa-bin'
         $fakeSource = Join-Path $multiRoot 'fake-baa.baa'
-        $fakeBaa = Join-Path $fakeBin ("baa" + $hostSuffix)
-        New-Item -ItemType Directory -Force $fakeBin | Out-Null
         $activePath = $env:PATH
         $arabicExitDigits = @('١', '٢', '٣', '٤', '٥')
         try {
             foreach ($compilerExitCode in 1..5) {
                 $digit = $arabicExitDigits[$compilerExitCode - 1]
+                $fakeBin = Join-Path $multiRoot "fake-baa-bin-$compilerExitCode"
+                $fakeBaa = Join-Path $fakeBin ("baa" + $hostSuffix)
+                New-Item -ItemType Directory -Force $fakeBin | Out-Null
                 $fakeSourceText = "صحيح الرئيسية() { إرجع $digit. }`n"
                 [IO.File]::WriteAllText($fakeSource, $fakeSourceText, $utf8NoBom)
                 $env:PATH = $activePath
@@ -897,9 +955,9 @@ commit = "$gitCommit"
 
                 $contractCommands = @(
                     @{ Name = 'check'; Arguments = @('check') },
-                    @{ Name = 'build'; Arguments = @('build', 'app') },
-                    @{ Name = 'run'; Arguments = @('run', 'app') },
-                    @{ Name = 'test'; Arguments = @('test', 'test_a') }
+                    @{ Name = 'build'; Arguments = @('build', 'تطبيق') },
+                    @{ Name = 'run'; Arguments = @('run', 'تطبيق') },
+                    @{ Name = 'test'; Arguments = @('test', 'اختبار_أ') }
                 )
                 foreach ($command in $contractCommands) {
                     Invoke-ExpectedExitCode $takween $command.Arguments $compilerExitCode `

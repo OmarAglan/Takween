@@ -14,6 +14,7 @@
 8. SemVer + SHA-256 + Locked/Offline Resolution
 9. Bounded Archive Extraction + Deterministic Vendoring + Arabic Identity
 10. Pure Deterministic Build Plan
+11. Target DAG + Cycle Detection
 
 ## حالات أساسية
 
@@ -34,12 +35,18 @@
   الكود نفسه ولا تحوله إلى `1`.
 - `تكوين خطة --جسون` و`تكوين أهداف --جسون` -> لا يحتاج المستخدم العربي إلى علم
   لاتيني، مع بقاء `--json` alias متوافقا للأتمتة.
+- `تكوين أهداف --جسون` 200 مرة على فهرس متعدد الأهداف -> عقد صالح بلا
+  access violation أو اعتماد على عمر temporaries داخل parser.
 
 ### Build/Run
 - `تكوين خطة --جسون` مرتين لنفس المدخلات -> `takween-build-plan-v1` مطابق بايتيا.
-- التخطيط -> لا ينشئ executable ولا يستدعي بناء Baa.
+- التخطيط -> لا ينشئ مجلد المخرج ولا executable ولا يستدعي بناء Baa.
 - بيان بلا `المجمع` -> argv تثبت `--assembler=gas`.
 - بيان `المجمع = "نظم"` -> argv تثبت `--assembler=nazm`.
+- `يعتمد_على` مكتبة -> `target_order` والمصادر dependency-first ثم ينجح الربط.
+- DAG بدورة -> كود `1` وتشخيص المسار الكامل `ألف -> باء -> جيم -> ألف`.
+- edge إلى هدف مفقود أو تنفيذي/اختبار -> رفض قبل التنفيذ.
+- اسم هدف لاتيني أو مختلط -> رفض هوية قبل التخطيط.
 - `تكوين check` -> `diagnostics-json-v1` صالح بلا تشخيصات لمشروع init.
 - `تكوين build` مع ملف صحيح -> نجاح + توليد ملف الناتج.
 - إعادة build -> `build-manifest.json` يسجل cache hit واحدا على الأقل.
@@ -74,7 +81,7 @@
 - حجم ملف فوق 8 MiB أو مجموع/عدد غير مطابق أو SHA-256 داخلي خاطئ -> فشل محدود.
 - قيد Baa للجذر أو الحزمة غير مطابق، أو target غير موجود، أو قدرة build ناقصة
   -> كود غير مدعوم واضح.
-- اسم مشروع/حزمة/alias لاتيني -> رفض بعقد الهوية العربية فقط.
+- اسم مشروع/هدف/حزمة/alias لاتيني -> رفض بعقد الهوية العربية فقط.
 - output يحوي مسافة و`&` -> يبنى ويعمل وينظف دون تفسير shell.
 
 ### Clean Safety
@@ -103,7 +110,8 @@ help/version وinit/check/build/rebuild/run/clean/plan، وعقود JSON وال�
 وفك الأرشيف المحدود والتوريد والتحقق دون شبكة والهوية العربية وقيود Baa/target،
 ورفض manifest غير صالح والأعلام الحرة
 ومسار clean الخطر. كما يبني Baa مزيفا لكل كود `compiler-cli-v1` من `1` إلى `5`
-ويثبت مروره كما هو عبر check/build/run/test:
+في مسار مستقل لكل probe لتجنب قفل Windows للملف التنفيذي، ويثبت مروره كما هو
+عبر check/build/run/test:
 
 ```powershell
 .\scripts\test_takween.ps1 `
@@ -136,7 +144,6 @@ help/version وinit/check/build/rebuild/run/clean/plan، وعقود JSON وال�
 
 ## البوابات التالية
 
-- DAG صريح للأهداف والاعتماديات مع fixture دورة ورسالة مسار الدورة.
 - أنماط `تطوير/إصدار` typed قابلة للتوسعة وتظهر في plan.
 - cache محتوى لخطة التنفيذ مع اختبارات hit/miss وتغيير كل مدخل للمفتاح.
 - مساحة عمل متعددة الحزم مع اختيار بناء واختبار حزمة بعينها.
