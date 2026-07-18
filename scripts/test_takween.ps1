@@ -1184,6 +1184,222 @@ commit = "$gitCommit"
         Pop-Location
     }
 
+    $workspaceRoot = Join-Path $tempRoot 'workspace-selective'
+    New-Item -ItemType Directory -Force $workspaceRoot | Out-Null
+    Get-ChildItem -Force -LiteralPath (Join-Path $root 'tests/fixtures/workspace_selective') |
+        Copy-Item -Destination $workspaceRoot -Recurse -Force
+    Push-Location $workspaceRoot
+    try {
+        $workspaceManifestPath = Join-Path $workspaceRoot 'مشروع.تكوين'
+        $workspaceManifest = Get-Content -Raw -Encoding utf8 -LiteralPath $workspaceManifestPath
+        $workspaceJson = Invoke-ExpectedSuccess $takween @('مساحة', '--جسون') `
+            'Arabic workspace index contract'
+        $workspaceAlias = Invoke-ExpectedSuccess $takween @('workspace', '--json') `
+            'workspace index compatibility contract'
+        if ($workspaceJson.Trim() -cne $workspaceAlias.Trim()) {
+            throw 'Arabic and compatibility workspace contracts differ.'
+        }
+        $workspaceData = $workspaceJson | ConvertFrom-Json
+        if ($workspaceData.schema_version -ne 'takween-workspace-v1' -or
+            @($workspaceData.members).Count -ne 2 -or
+            $workspaceData.members[0].name -ne 'الحزمة_الأولى' -or
+            $workspaceData.members[0].path -ne 'حزم/الحزمة_الأولى' -or
+            $workspaceData.members[0].order -ne 0 -or
+            -not $workspaceData.members[0].has_tests -or
+            $workspaceData.members[1].name -ne 'الحزمة_الثانية' -or
+            $workspaceData.members[1].order -ne 1 -or
+            $workspaceData.members[1].has_tests) {
+            throw 'Workspace index does not preserve declared package order and test capability.'
+        }
+        if (Test-Path -LiteralPath (Join-Path $workspaceRoot 'بناء')) {
+            throw 'Workspace indexing built the root package.'
+        }
+        foreach ($iteration in 1..200) {
+            $stressWorkspace = Invoke-ExpectedSuccess $takween @('مساحة', '--جسون') `
+                "workspace ownership stress iteration $iteration"
+            if ($stressWorkspace.Trim() -cne $workspaceJson.Trim()) {
+                throw "Workspace contract changed at stress iteration $iteration."
+            }
+        }
+
+        $firstPackageRoot = Join-Path $workspaceRoot 'حزم/الحزمة_الأولى'
+        $secondPackageRoot = Join-Path $workspaceRoot 'حزم/الحزمة_الثانية'
+        $spacedPackageRelative = 'حزم/الحزمة الأولى & آمنة'
+        $spacedPackageRoot = Join-Path $workspaceRoot $spacedPackageRelative
+        Move-Item -LiteralPath $firstPackageRoot -Destination $spacedPackageRoot
+        $spacedWorkspaceManifest = $workspaceManifest.Replace(
+            'حزم/الحزمة_الأولى',
+            $spacedPackageRelative)
+        [IO.File]::WriteAllText($workspaceManifestPath, $spacedWorkspaceManifest, $utf8NoBom)
+        $spacedWorkspaceJson = Invoke-ExpectedSuccess $takween @('مساحة', '--جسون') `
+            'Arabic spaced workspace path index'
+        $spacedWorkspaceData = $spacedWorkspaceJson | ConvertFrom-Json
+        if ($spacedWorkspaceData.members[0].path -ne $spacedPackageRelative) {
+            throw 'Workspace index did not preserve the Arabic metacharacter member path.'
+        }
+        Invoke-ExpectedSuccess $takween @('بناء', '--حزمة', 'الحزمة_الأولى') `
+            'Arabic spaced workspace member build' | Out-Null
+        if (-not (Test-Path -LiteralPath (
+                Join-Path $spacedPackageRoot ("بناء/تطبيق_أول" + $hostSuffix)))) {
+            throw 'Structured workspace process did not build the Arabic metacharacter path.'
+        }
+        Move-Item -LiteralPath $spacedPackageRoot -Destination $firstPackageRoot
+        [IO.File]::WriteAllText($workspaceManifestPath, $workspaceManifest, $utf8NoBom)
+
+        $firstExecutable = Join-Path $firstPackageRoot ("بناء/تطبيق_أول" + $hostSuffix)
+        $secondExecutable = Join-Path $secondPackageRoot ("بناء/تطبيق_ثان" + $hostSuffix)
+        Invoke-ExpectedSuccess $takween @('بناء', '--حزمة', 'الحزمة_الأولى') `
+            'selective Arabic workspace build' | Out-Null
+        if (-not (Test-Path -LiteralPath $firstExecutable) -or
+            (Test-Path -LiteralPath $secondExecutable)) {
+            throw 'Selective workspace build did not isolate the requested package.'
+        }
+
+        $allBuildOutput = Invoke-ExpectedSuccess $takween @('build', '--all-packages') `
+            'all-packages compatibility build'
+        if (-not (Test-Path -LiteralPath $firstExecutable) -or
+            -not (Test-Path -LiteralPath $secondExecutable)) {
+            throw 'All-packages workspace build did not build every declared member.'
+        }
+        if ($allBuildOutput.IndexOf('الحزمة_الأولى', [StringComparison]::Ordinal) -lt 0 -or
+            $allBuildOutput.IndexOf('الحزمة_الثانية', [StringComparison]::Ordinal) -lt
+                $allBuildOutput.IndexOf('الحزمة_الأولى', [StringComparison]::Ordinal)) {
+            throw 'All-packages workspace build did not preserve declared member order.'
+        }
+        Invoke-ExpectedSuccess $takween @('بناء', '--كل_الحزم', '--مقفل') `
+            'locked all-package rebuild' | Out-Null
+
+        Invoke-ExpectedSuccess $takween `
+            @('بناء', '--حزمة', 'الحزمة_الأولى', '--نمط', 'إصدار') `
+            'workspace profile forwarding' | Out-Null
+        $workspaceCachePath = Join-Path $firstPackageRoot 'بناء/build-cache.json'
+        $workspaceCache = Get-Content -Raw -Encoding utf8 -LiteralPath $workspaceCachePath |
+            ConvertFrom-Json
+        if ($workspaceCache.profile.name -ne 'إصدار' -or
+            $workspaceCache.profile.optimization -ne 2 -or
+            -not $workspaceCache.profile.verify) {
+            throw 'Workspace build did not forward the typed profile to its child package.'
+        }
+
+        $allWorkspaceTests = Invoke-ExpectedSuccess $takween @('اختبار', '--كل_الحزم') `
+            'all workspace tests'
+        if ($allWorkspaceTests -notmatch 'نجح اختبار الحزمة الأولى') {
+            throw 'Workspace test did not execute the member that owns tests.'
+        }
+        $selectedWorkspaceTest = Invoke-ExpectedSuccess $takween `
+            @('اختبار', '--حزمة', 'الحزمة_الأولى') 'selected workspace test'
+        if ($selectedWorkspaceTest -notmatch 'نجح اختبار الحزمة الأولى') {
+            throw 'Selective workspace test did not execute the requested package.'
+        }
+        Invoke-ExpectedExitCode $takween @('اختبار', '--حزمة', 'الحزمة_الثانية') 3 `
+            'workspace member without tests' | Out-Null
+
+        $workspaceTestSourcePath = Join-Path $firstPackageRoot 'المصدر/الاختبار.baa'
+        $workspaceTestSource = Get-Content -Raw -Encoding utf8 -LiteralPath $workspaceTestSourcePath
+        $failingWorkspaceTest = $workspaceTestSource.Replace('إرجع ٠.', 'إرجع ٧.')
+        [IO.File]::WriteAllText($workspaceTestSourcePath, $failingWorkspaceTest, $utf8NoBom)
+        Invoke-ExpectedExitCode $takween @('اختبار', '--حزمة', 'الحزمة_الأولى') 7 `
+            'workspace member program exit preservation' | Out-Null
+        [IO.File]::WriteAllText($workspaceTestSourcePath, $workspaceTestSource, $utf8NoBom)
+
+        $workspaceAppSourcePath = Join-Path $firstPackageRoot 'المصدر/التطبيق.baa'
+        $workspaceAppSource = Get-Content -Raw -Encoding utf8 -LiteralPath $workspaceAppSourcePath
+        $invalidWorkspaceApp = $workspaceAppSource.Replace('إرجع ٠.', 'إرجع.')
+        [IO.File]::WriteAllText($workspaceAppSourcePath, $invalidWorkspaceApp, $utf8NoBom)
+        Remove-Item -Recurse -Force -LiteralPath (Join-Path $secondPackageRoot 'بناء')
+        Invoke-ExpectedExitCode $takween @('بناء', '--كل_الحزم') 1 `
+            'workspace compiler source exit and fail-fast preservation' | Out-Null
+        if (Test-Path -LiteralPath $secondExecutable) {
+            throw 'All-package build continued after the first member failure.'
+        }
+        [IO.File]::WriteAllText($workspaceAppSourcePath, $workspaceAppSource, $utf8NoBom)
+
+        Invoke-ExpectedExitCode $takween @('بناء', '--حزمة', 'حزمة_مفقودة') 3 `
+            'missing workspace package' | Out-Null
+        Invoke-ExpectedExitCode $takween @('بناء', '--حزمة', 'package') 2 `
+            'Latin workspace package identity rejection' | Out-Null
+        Invoke-ExpectedExitCode $takween `
+            @('بناء', 'جذر_المساحة', '--حزمة', 'الحزمة_الأولى') 2 `
+            'mixed target and workspace package rejection' | Out-Null
+        Invoke-ExpectedExitCode $takween `
+            @('بناء', '--حزمة', 'الحزمة_الأولى', '--كل_الحزم') 2 `
+            'mixed workspace selectors rejection' | Out-Null
+        Invoke-ExpectedExitCode $takween @('فحص', '--حزمة', 'الحزمة_الأولى') 2 `
+            'unsupported workspace check selector' | Out-Null
+
+        $globWorkspace = $workspaceManifest.Replace(
+            '["حزم/الحزمة_الأولى", "حزم/الحزمة_الثانية"]',
+            '["حزم/*"]')
+        [IO.File]::WriteAllText($workspaceManifestPath, $globWorkspace, $utf8NoBom)
+        Invoke-ExpectedExitCode $takween @('مساحة', '--جسون') 1 `
+            'deferred workspace glob rejection' | Out-Null
+
+        $escapeWorkspace = $workspaceManifest.Replace(
+            '["حزم/الحزمة_الأولى", "حزم/الحزمة_الثانية"]',
+            '["../خارج"]')
+        [IO.File]::WriteAllText($workspaceManifestPath, $escapeWorkspace, $utf8NoBom)
+        Invoke-ExpectedExitCode $takween @('مساحة', '--جسون') 1 `
+            'workspace path escape rejection' | Out-Null
+
+        $absoluteWorkspace = $workspaceManifest.Replace(
+            '["حزم/الحزمة_الأولى", "حزم/الحزمة_الثانية"]',
+            '["/خارج"]')
+        [IO.File]::WriteAllText($workspaceManifestPath, $absoluteWorkspace, $utf8NoBom)
+        Invoke-ExpectedExitCode $takween @('مساحة', '--جسون') 1 `
+            'absolute workspace path rejection' | Out-Null
+
+        $nonCanonicalWorkspace = $workspaceManifest.Replace(
+            '["حزم/الحزمة_الأولى", "حزم/الحزمة_الثانية"]',
+            '["حزم/./الحزمة_الأولى"]')
+        [IO.File]::WriteAllText($workspaceManifestPath, $nonCanonicalWorkspace, $utf8NoBom)
+        Invoke-ExpectedExitCode $takween @('مساحة', '--جسون') 1 `
+            'non-canonical workspace path rejection' | Out-Null
+
+        $duplicatePathWorkspace = $workspaceManifest.Replace(
+            '["حزم/الحزمة_الأولى", "حزم/الحزمة_الثانية"]',
+            '["حزم/الحزمة_الأولى", "حزم/الحزمة_الأولى"]')
+        [IO.File]::WriteAllText($workspaceManifestPath, $duplicatePathWorkspace, $utf8NoBom)
+        Invoke-ExpectedExitCode $takween @('مساحة', '--جسون') 1 `
+            'duplicate workspace path rejection' | Out-Null
+
+        $missingMemberWorkspace = $workspaceManifest.Replace(
+            '["حزم/الحزمة_الأولى", "حزم/الحزمة_الثانية"]',
+            '["حزم/حزمة_مفقودة"]')
+        [IO.File]::WriteAllText($workspaceManifestPath, $missingMemberWorkspace, $utf8NoBom)
+        Invoke-ExpectedExitCode $takween @('مساحة', '--جسون') 1 `
+            'missing workspace member manifest rejection' | Out-Null
+        [IO.File]::WriteAllText($workspaceManifestPath, $workspaceManifest, $utf8NoBom)
+
+        $secondManifestPath = Join-Path $secondPackageRoot 'مشروع.تكوين'
+        $secondManifest = Get-Content -Raw -Encoding utf8 -LiteralPath $secondManifestPath
+        $duplicateNameManifest = $secondManifest.Replace(
+            'الاسم = "الحزمة_الثانية"',
+            'الاسم = "الحزمة_الأولى"')
+        [IO.File]::WriteAllText($secondManifestPath, $duplicateNameManifest, $utf8NoBom)
+        Invoke-ExpectedExitCode $takween @('مساحة', '--جسون') 1 `
+            'duplicate workspace package identity rejection' | Out-Null
+
+        $latinMemberManifest = $secondManifest.Replace(
+            'الاسم = "الحزمة_الثانية"',
+            'الاسم = "package"')
+        [IO.File]::WriteAllText($secondManifestPath, $latinMemberManifest, $utf8NoBom)
+        Invoke-ExpectedExitCode $takween @('مساحة', '--جسون') 1 `
+            'Latin workspace member identity rejection' | Out-Null
+        [IO.File]::WriteAllText($secondManifestPath, $secondManifest, $utf8NoBom)
+
+        $nestedManifest = $secondManifest + "`n[مساحة_العمل]`nالأعضاء = [`"داخل`"]`n"
+        [IO.File]::WriteAllText($secondManifestPath, $nestedManifest, $utf8NoBom)
+        Invoke-ExpectedExitCode $takween @('مساحة', '--جسون') 1 `
+            'nested workspace rejection' | Out-Null
+        [IO.File]::WriteAllText($secondManifestPath, $secondManifest, $utf8NoBom)
+
+        if (Test-Path -LiteralPath (Join-Path $workspaceRoot 'بناء')) {
+            throw 'Workspace member operations unexpectedly built the root package.'
+        }
+    } finally {
+        Pop-Location
+    }
+
     Write-Output 'Takween smoke tests passed.'
     $global:LASTEXITCODE = 0
 } finally {
