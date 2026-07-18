@@ -115,10 +115,13 @@ help/version وinit/check/build/rebuild/run/clean/plan، وعقود JSON وال�
 
 الrunner يستخدم `IO.Path.PathSeparator` ولا يحتوي مسار تنفيذ Windows خاصا، لذا
 هو نفسه عقد Windows/Linux. إيصال GitHub Actions رقم
-[29258386560](https://github.com/OmarAglan/Takween/actions/runs/29258386560)
-بتاريخ 2026-07-13 شغّل الملف نفسه عبر `pwsh` ونجح على
-`windows-latest` و`ubuntu-latest`، بما في ذلك اعتماديات Git المثبتة والقفل الحتمي
-وتمرير كل كود `compiler-cli-v1` من `1` إلى `5` عبر check/build/run/test.
+[29638353991](https://github.com/OmarAglan/Takween/actions/runs/29638353991)
+بتاريخ 2026-07-18 شغّل الملف نفسه عبر `pwsh` ونجح على
+`windows-latest` و`ubuntu-latest` عند commit
+`42e68f5f3145e072df357cb7450104378e181bdc`. شمل ذلك خطة
+`takween-build-plan-v1` الحتمية وعلَم `--جسون` العربي وعدم تنفيذ المصرّف أثناء
+التخطيط، إضافة إلى اعتماديات Git المثبتة والقفل الحتمي وتمرير كل كود
+`compiler-cli-v1` من `1` إلى `5` عبر check/build/run/test.
 
 ## سيناريو المثبت (يدوي)
 1. شغّل `scripts\build_installer.ps1`.
