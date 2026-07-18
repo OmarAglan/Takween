@@ -131,6 +131,13 @@ help/version وinit/check/build/rebuild/run/clean/plan، وعقود JSON وال�
 التخطيط، إضافة إلى اعتماديات Git المثبتة والقفل الحتمي وتمرير كل كود
 `compiler-cli-v1` من `1` إلى `5` عبر check/build/run/test.
 
+إيصال DAG الأهداف رقم
+[29640162638](https://github.com/OmarAglan/Takween/actions/runs/29640162638)
+بتاريخ 2026-07-18 نجح على `windows-latest` و`ubuntu-latest` عند commit
+`448acea3c3f5f31947e624108516c4a661be0253`. شمل ذلك الترتيب الحتمي
+dependency-first، ودمج مصادر المكتبات انتقائيا، وكشف الدورة بمسار كامل، وهويات
+الأهداف العربية فقط، وstress من 200 process لعقد `takween-targets-v1`.
+
 ## سيناريو المثبت (يدوي)
 1. شغّل `scripts\build_installer.ps1`.
 2. ثبّت النسخة الناتجة.
