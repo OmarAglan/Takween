@@ -78,6 +78,8 @@
 - [x] جذور `.baa` و`.نظم` مختلطة، واختيار typed عربي
       `المجمع = "نظم"` يستهلك قدرة `nazm_source` ويستخدم الأمر العربي `نظم`
       من `PATH` بلا مسار أو علم لاتيني يكتبه المستخدم.
+- [x] اعتماد نَظْم افتراضيا عند حذف `المجمع` مع تثبيت الاختيار في خطة البناء
+      والقفل، وإبقاء `المجمع = "غاز"` رجوعا صريحا بلا fallback تلقائي.
 - [x] خطة بناء مملوكة وحتمية مستقلة عن التنفيذ الجانبي، مع عقد
       `takween-build-plan-v1` وأمر `خطة --جسون` لا يشغّل المصرّف.
 - [x] DAG صريح للأهداف عبر `يعتمد_على` مع ترتيب حتمي dependency-first، دمج
@@ -103,6 +105,13 @@
 الفهرس والاختيار والعزل وتمرير الأكواد واختبارات الضغط. نجح
 [Takween cross-platform smoke رقم 29644762434](https://github.com/OmarAglan/Takween/actions/runs/29644762434)
 على `windows-latest` و`ubuntu-latest`.
+
+**إيصال قبول نَظْم الافتراضي:** نفذ commit
+[`4fe634f`](https://github.com/OmarAglan/Takween/commit/4fe634f92abf9658a21b6ce5bf80b91e08958877)
+اختيار نَظْم الافتراضي والرجوع الصريح إلى غاز وتثبيت مراجعات Baa/Nazm.
+نجح [smoke رقم 29648265475](https://github.com/OmarAglan/Takween/actions/runs/29648265475)
+على Windows وLinux، بالتوازي مع
+[قبول Baa/Nazm رقم 29648276376](https://github.com/OmarAglan/Baa/actions/runs/29648276376).
 
 ## 0.5 — اعتماديات محلية وملف قفل
 
