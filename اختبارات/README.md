@@ -5,7 +5,9 @@
 من جذر المستودع:
 
 ```powershell
-.\scripts\test_takween.ps1 -BaaPath <path-to-baa.exe>
+.\scripts\test_takween.ps1 `
+  -BaaPath <path-to-baa.exe> `
+  -NazmPath <path-to-nazm.exe>
 ```
 
 يغطي runner:
@@ -13,11 +15,11 @@
 - `--help` و`--version`؛
 - `init` وإنشاء الملفين؛
 - build/run والخرج المتوقع؛
+- `takween-build-plan-v1` الحتمي وعدم تنفيذ المصرّف أثناء التخطيط؛
+- تثبيت `غاز` افتراضيا والحفاظ على اختيار `نظم` في الخطة؛
 - clean وحذف مجلد البناء فقط؛
 - رفض مفتاح مجهول؛
 - رفض `المخرج: .` في clean.
 
-## لاحقا
-
-يبقى فصل parser إلى API قابلة لاختبارات وحدات، وإضافة Linux، واختبارات عقود
-JSON/build-manifest ضمن خارطة 0.2.
+يغطي runner كذلك عقود v1 والأهداف المتعددة واعتماديات path/Git/SemVer والأرشيف
+والقفل والتوريد وأكواد `compiler-cli-v1`. تشغله CI على Windows وLinux.

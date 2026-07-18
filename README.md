@@ -5,7 +5,7 @@
 > The Arabic-first build system for Baa.
 
 ## الحالة الحالية (Current Status)
-- **آخر تحديث:** 2026-07-13
+- **آخر تحديث:** 2026-07-18
 - **إصدار تكوين:** `0.1.0`.
 - **خط أساس باء في مساحة Eco:** `0.6.0`؛ runner ‏init/check/build/run/test/clean/targets
   وبيان v1 واعتماديات المسار وGit المثبتة يمر بهذا المصرّف على Windows.
@@ -13,6 +13,8 @@
 - **وضع تكوين:** parser متوافق مع صيغة 0.1 ومع `takween-manifest-v1` متعدد الأهداف؛
   check/build/run/test/clean يستخدم Process API مهيكلة من Baa بلا shell، مع بناء
   incremental واعتماديات مسار/Git واكتشاف هدف المضيف عبر `target-info-v1`.
+  يفصل `takween-build-plan-v1` الخطة الحتمية المملوكة عن التنفيذ، ويعرضها الأمر
+  `تكوين خطة --جسون` دون تشغيل المصرّف.
   تقبل خطة البناء جذور `.baa` و`.نظم`، ويختار الحقل العربي
   `المجمع = "نظم"` مجمع نظم من الأمر العربي `نظم` على `PATH`.
 - **الاعتمادات:** لا توجد `stdlib` محلية داخل Takween؛ يتم الاعتماد على `baalib.baahd` من تثبيت Baa.
@@ -56,10 +58,11 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 ```powershell
 تكوين تهيئة      # init
 تكوين فحص        # check, diagnostics-json-v1
+تكوين خطة --جسون # deterministic takween-build-plan-v1
 تكوين بناء       # build
 تكوين تشغيل      # run
 تكوين اختبار     # test: تشغيل كل أهداف الاختبار
-تكوين أهداف --json # targets: takween-targets-v1
+تكوين أهداف --جسون # targets: takween-targets-v1
 تكوين تنظيف      # clean
 تكوين --إصدار    # version
 ```
@@ -69,6 +72,11 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 يبني `تكوين بناء` مباشرة إلى مجلد المخرجات، ويستخدم كاش Baa incremental تحت
 `المخرج/.takween-cache`، ويكتب `المخرج/build-manifest.json`. الحقول الحرة مثل
 `أعلام_إضافية` مرفوضة تنفيذيا حتى تستبدل بخيارات typed.
+
+يعرض `تكوين خطة --جسون [اسم_هدف]` نفس argv المملوكة التي سيستهلكها البناء من
+دون إنشاء مجلد المخرج أو تشغيل Baa. المخطط نقي بعد اكتمال الاكتشاف وحل
+الاعتماديات، ويثبت `--assembler=gas` عندما لا يختار البيان مجمعا، أو
+`--assembler=nazm` عند `المجمع = "نظم"`.
 
 يُكتشف v1 عندما يبدأ أول سطر فعال بقسم `[ ... ]`. يدعم التنفيذ الحالي عدة أهداف
 `تنفيذي/اختبار/مكتبة`، واختيار الهدف في build/check/run، وتشغيل هدف اختبار واحد أو
@@ -124,6 +132,7 @@ commit = "0123456789abcdef0123456789abcdef01234567"
 - [سجل التغييرات](CHANGELOG.md)
 - [صيغة البيان v1 وحالة التنفيذ](مستندات/MANIFEST_V1.md)
 - [معمارية الحزم والقفل](مستندات/PACKAGES.md)
+- [عقد خطة البناء v1](مستندات/BUILD_PLAN_V1.md)
 - [دليل المثبت](مستندات/INSTALLER.md)
 
 ## الارتباط بمشروع Baa

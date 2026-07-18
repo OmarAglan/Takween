@@ -166,6 +166,21 @@ try {
     if ($executorSource -match 'cmd\s+/c' -or $executorSource.Contains($legacyExecute)) {
         throw 'Takween executor regressed to shell command strings.'
     }
+    $plannerPath = Join-Path $root 'المصدر/مخطط_البناء.baa'
+    $plannerSource = Get-Content -Raw -Encoding utf8 -LiteralPath $plannerPath
+    $plannerSideEffects = @(
+        'حل_اعتماديات',
+        'ابدأ_عملية',
+        'شغل_وسائط',
+        'انشئ_مجلدات',
+        'اكتب_ملف',
+        'احذف_شجرة'
+    )
+    foreach ($sideEffect in $plannerSideEffects) {
+        if ($plannerSource.Contains($sideEffect)) {
+            throw "Pure build planner contains side-effecting operation: $sideEffect"
+        }
+    }
 
     $help = Invoke-ExpectedSuccess $takween @('--مساعدة') 'Arabic help contract'
     if ($help -notmatch 'Takween') { throw 'Help output does not contain the portable command name.' }
@@ -361,6 +376,15 @@ try {
         Copy-Item -Destination $nazmRoot -Recurse -Force
     Push-Location $nazmRoot
     try {
+        $nazmPlan = Invoke-ExpectedSuccess $takween @('خطة', '--جسون') 'typed Arabic Nazm build plan' |
+            ConvertFrom-Json
+        if ($nazmPlan.schema_version -ne 'takween-build-plan-v1' -or
+            $nazmPlan.argv -notcontains '--assembler=nazm') {
+            throw 'Nazm manifest selection was not preserved in the deterministic build plan.'
+        }
+        if (Test-Path -LiteralPath (Join-Path $nazmRoot ("build/nazm_app" + $hostSuffix))) {
+            throw 'Nazm planning executed the compiler instead of returning an inert plan.'
+        }
         Invoke-ExpectedSuccess $takween @('build') 'typed Arabic Nazm assembler build' | Out-Null
         $nazmManifestPath = Join-Path $nazmRoot 'build/build-manifest.json'
         $nazmManifest = Get-Content -Raw -Encoding utf8 -LiteralPath $nazmManifestPath |
@@ -805,7 +829,11 @@ commit = "$gitCommit"
         Copy-Item -Destination $multiRoot -Recurse -Force
     Push-Location $multiRoot
     try {
-        $targetJson = Invoke-ExpectedSuccess $takween @('targets', '--json') 'target status contract'
+        $targetJson = Invoke-ExpectedSuccess $takween @('أهداف', '--جسون') 'Arabic target status contract'
+        $targetJsonAlias = Invoke-ExpectedSuccess $takween @('targets', '--json') 'target status compatibility contract'
+        if ($targetJson.Trim() -cne $targetJsonAlias.Trim()) {
+            throw 'Arabic and compatibility target status contracts differ.'
+        }
         $targetData = $targetJson | ConvertFrom-Json
         if ($targetData.schema_version -ne 'takween-targets-v1' -or @($targetData.targets).Count -ne 4) {
             throw 'Multi-target status did not expose takween-targets-v1 with four targets.'
@@ -814,6 +842,25 @@ commit = "$gitCommit"
         $library = @($targetData.targets | Where-Object { $_.kind -eq 'library' })
         if ($tests.Count -ne 2 -or $library.Count -ne 1 -or $library[0].buildable) {
             throw 'Target status kinds/capabilities are inconsistent.'
+        }
+
+        Invoke-ExpectedExitCode $takween @('plan', 'app') 2 'plan JSON requirement' | Out-Null
+        $firstPlanText = Invoke-ExpectedSuccess $takween @('خطة', '--جسون', 'app') 'Arabic build plan contract'
+        $secondPlanText = Invoke-ExpectedSuccess $takween @('plan', 'app', '--json') 'deterministic build plan contract'
+        if ($firstPlanText.Trim() -cne $secondPlanText.Trim()) {
+            throw 'Repeated build planning did not produce byte-identical JSON.'
+        }
+        $planData = $firstPlanText | ConvertFrom-Json
+        if ($planData.schema_version -ne 'takween-build-plan-v1' -or
+            $planData.operation -ne 'build' -or
+            $planData.project -ne 'متعدد' -or
+            $planData.target -ne 'app' -or
+            $planData.argv[0] -ne 'baa' -or
+            $planData.argv -notcontains '--assembler=gas') {
+            throw 'Build plan does not satisfy takween-build-plan-v1 or pin the production assembler.'
+        }
+        if (Test-Path -LiteralPath (Join-Path $multiRoot ("build/app" + $hostSuffix))) {
+            throw 'Planning executed the compiler instead of returning an inert plan.'
         }
 
         Invoke-ExpectedSuccess $takween @('build', 'app') 'selected executable build' | Out-Null

@@ -13,6 +13,7 @@
 7. Typed Manifest + Path/Pinned-Git/Local-Archive Dependencies + Lock Determinism
 8. SemVer + SHA-256 + Locked/Offline Resolution
 9. Bounded Archive Extraction + Deterministic Vendoring + Arabic Identity
+10. Pure Deterministic Build Plan
 
 ## حالات أساسية
 
@@ -31,8 +32,14 @@
 - هدف/نوع معروف غير مدعوم -> كود خروج `3`.
 - Baa مزيف يعيد كل كود من `1` إلى `5` -> تحافظ أوامر check/build/run/test على
   الكود نفسه ولا تحوله إلى `1`.
+- `تكوين خطة --جسون` و`تكوين أهداف --جسون` -> لا يحتاج المستخدم العربي إلى علم
+  لاتيني، مع بقاء `--json` alias متوافقا للأتمتة.
 
 ### Build/Run
+- `تكوين خطة --جسون` مرتين لنفس المدخلات -> `takween-build-plan-v1` مطابق بايتيا.
+- التخطيط -> لا ينشئ executable ولا يستدعي بناء Baa.
+- بيان بلا `المجمع` -> argv تثبت `--assembler=gas`.
+- بيان `المجمع = "نظم"` -> argv تثبت `--assembler=nazm`.
 - `تكوين check` -> `diagnostics-json-v1` صالح بلا تشخيصات لمشروع init.
 - `تكوين build` مع ملف صحيح -> نجاح + توليد ملف الناتج.
 - إعادة build -> `build-manifest.json` يسجل cache hit واحدا على الأقل.
@@ -91,7 +98,7 @@
 ## runner الآلي
 
 يشغل `scripts/test_takween.ps1` بناء تكوين بمصرّف Baa محدد، ثم يتحقق من
-help/version وinit/check/build/rebuild/run/clean، وعقود JSON والكاش، وحدود argv،
+help/version وinit/check/build/rebuild/run/clean/plan، وعقود JSON والكاش، وحدود argv،
 وبيان v1 واعتماديات path/Git/archive وSemVer وSHA-256 و`--locked` والقفل الحتمي،
 وفك الأرشيف المحدود والتوريد والتحقق دون شبكة والهوية العربية وقيود Baa/target،
 ورفض manifest غير صالح والأعلام الحرة
@@ -126,12 +133,7 @@ help/version وinit/check/build/rebuild/run/clean، وعقود JSON والكاش
 
 ## البوابات التالية
 
-- اختبارات parser بوحدات صغيرة بعد فصل النموذج عن globals.
-- يتحقق runner من `target-info-v1` ومن أن اسم ناتج Takween وناتج المشروع يستخدمان
-  لاحقة التنفيذ التي أعلنها Baa للمضيف.
-- يشغل `.github/workflows/ci.yml` runner نفسه على `windows-latest` و`ubuntu-latest`
-  بعد بناء Baa بإعداد CI القياسي نفسه.
-- يغطي fixture متعدد الأهداف عقد `takween-targets-v1` واختيار build/run وهدف اختبار
-  واحد وتشغيل كل أهداف الاختبار ورفض الهدف المفقود ونوع المكتبة غير المدعوم.
-- ينشئ runner مستودع Git محليا بلا شبكة، ويثبت HEAD، ويتحقق من checkout المتعدي
-  وإعادة الاستخدام بعد نقل المصدر وثبات lock bytes ورفض moving refs.
+- DAG صريح للأهداف والاعتماديات مع fixture دورة ورسالة مسار الدورة.
+- أنماط `تطوير/إصدار` typed قابلة للتوسعة وتظهر في plan.
+- cache محتوى لخطة التنفيذ مع اختبارات hit/miss وتغيير كل مدخل للمفتاح.
+- مساحة عمل متعددة الحزم مع اختيار بناء واختبار حزمة بعينها.
