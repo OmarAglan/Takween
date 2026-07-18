@@ -452,9 +452,9 @@ try {
 
 [البناء]
 المخرج = "build"
-النمط = "dev"
+النمط = "تطوير"
 
-[الأنماط.dev]
+[الأنماط.تطوير]
 التحسين = 1
 التحقق = خطأ
 "@
@@ -492,9 +492,9 @@ try {
 
 [البناء]
 المخرج = "build"
-النمط = "dev"
+النمط = "تطوير"
 
-[الأنماط.dev]
+[الأنماط.تطوير]
 التحسين = 1
 التحقق = صواب
 
@@ -710,9 +710,9 @@ try {
 
 [البناء]
 المخرج = "build git"
-النمط = "dev"
+النمط = "تطوير"
 
-[الأنماط.dev]
+[الأنماط.تطوير]
 التحسين = 1
 التحقق = صواب
 
@@ -870,6 +870,22 @@ commit = "$gitCommit"
         if ($nonLibraryFailure -notmatch 'مكتبة') {
             throw 'Non-library target dependency rejection did not explain the library-only edge rule.'
         }
+        $latinProfileManifest = $multiManifest.Replace('[الأنماط.تدقيق]', '[الأنماط.audit]')
+        [IO.File]::WriteAllText($multiManifestPath, $latinProfileManifest, $utf8NoBom)
+        Invoke-ExpectedExitCode $takween @('خطة', '--جسون', 'تطبيق') 1 `
+            'Latin profile identity rejection' | Out-Null
+        $duplicateProfileManifest = $multiManifest.Replace(
+            'التحسين = ١',
+            "التحسين = ١`nالتحسين = ٠")
+        [IO.File]::WriteAllText($multiManifestPath, $duplicateProfileManifest, $utf8NoBom)
+        Invoke-ExpectedExitCode $takween @('خطة', '--جسون', 'تطبيق') 1 `
+            'duplicate typed profile field rejection' | Out-Null
+        $invalidVerifyProfile = $multiManifest.Replace(
+            "[الأنماط.تدقيق]`nالتحسين = ٠`nالتحقق = خطأ",
+            "[الأنماط.تدقيق]`nالتحسين = ٠`nالتحقق = صواب")
+        [IO.File]::WriteAllText($multiManifestPath, $invalidVerifyProfile, $utf8NoBom)
+        Invoke-ExpectedExitCode $takween @('خطة', '--جسون', '--نمط', 'تدقيق', 'تطبيق') 1 `
+            'verify with optimization zero rejection' | Out-Null
         [IO.File]::WriteAllText($multiManifestPath, $multiManifest, $utf8NoBom)
 
         $targetJson = Invoke-ExpectedSuccess $takween @('أهداف', '--جسون') 'Arabic target status contract'
@@ -909,14 +925,53 @@ commit = "$gitCommit"
             $planData.operation -ne 'build' -or
             $planData.project -ne 'متعدد' -or
             $planData.target -ne 'تطبيق' -or
+            $planData.profile.name -ne 'تطوير' -or
+            $planData.profile.optimization -ne 1 -or
+            -not $planData.profile.verify -or
             $planData.argv[0] -ne 'baa' -or
-            $planData.argv -notcontains '--assembler=gas') {
-            throw 'Build plan does not satisfy takween-build-plan-v1 or pin the production assembler.'
+            $planData.argv -notcontains '--assembler=gas' -or
+            $planData.argv -notcontains '-O1' -or
+            $planData.argv -notcontains '--verify') {
+            throw 'Build plan does not satisfy takween-build-plan-v1 or own its تطوير profile.'
         }
         if ((@($planData.target_order) -join '|') -ne 'مساعدة|تطبيق' -or
             @($planData.argv | Where-Object { $_ -like '*src/library.baa' }).Count -ne 1) {
             throw 'Build plan did not flatten the selected target DAG in dependency-first order.'
         }
+        $releasePlanText = Invoke-ExpectedSuccess $takween `
+            @('خطة', '--جسون', '--نمط', 'إصدار', 'تطبيق') 'Arabic release profile override'
+        $releaseAliasText = Invoke-ExpectedSuccess $takween `
+            @('plan', '--json', '--profile', 'إصدار', 'تطبيق') 'profile compatibility override'
+        if ($releasePlanText.Trim() -cne $releaseAliasText.Trim()) {
+            throw 'Arabic and compatibility release profile plans differ.'
+        }
+        $releasePlan = $releasePlanText | ConvertFrom-Json
+        if ($releasePlan.profile.name -ne 'إصدار' -or
+            $releasePlan.profile.optimization -ne 2 -or
+            -not $releasePlan.profile.verify -or
+            $releasePlan.argv -notcontains '-O2' -or
+            $releasePlan.argv -notcontains '--verify') {
+            throw 'The إصدار profile did not produce its typed owned plan.'
+        }
+        $customPlanText = Invoke-ExpectedSuccess $takween `
+            @('خطة', '--جسون', '--نمط', 'تدقيق', 'تطبيق') 'custom Arabic profile override'
+        $customPlan = $customPlanText | ConvertFrom-Json
+        if ($customPlan.profile.name -ne 'تدقيق' -or
+            $customPlan.profile.optimization -ne 0 -or
+            $customPlan.profile.verify -or
+            $customPlan.argv -notcontains '-O0' -or
+            $customPlan.argv -contains '--verify') {
+            throw 'The extensible custom profile did not override typed fields.'
+        }
+        Invoke-ExpectedExitCode $takween @('خطة', '--جسون', '--نمط') 2 `
+            'missing profile option value' | Out-Null
+        Invoke-ExpectedExitCode $takween @('خطة', '--جسون', '--نمط', 'dev', 'تطبيق') 2 `
+            'Latin CLI profile identity rejection' | Out-Null
+        Invoke-ExpectedExitCode $takween `
+            @('خطة', '--جسون', '--نمط', 'تطوير', '--نمط', 'إصدار', 'تطبيق') 2 `
+            'duplicate profile option rejection' | Out-Null
+        Invoke-ExpectedExitCode $takween @('خطة', '--جسون', '--نمط', 'مفقود', 'تطبيق') 1 `
+            'undefined Arabic profile rejection' | Out-Null
         if (Test-Path -LiteralPath (Join-Path $multiRoot 'build')) {
             throw 'Planning created the output directory instead of returning an inert plan.'
         }
