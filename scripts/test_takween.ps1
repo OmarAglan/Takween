@@ -881,8 +881,8 @@ commit = "$gitCommit"
         Invoke-ExpectedExitCode $takween @('خطة', '--جسون', 'تطبيق') 1 `
             'duplicate typed profile field rejection' | Out-Null
         $invalidVerifyProfile = $multiManifest.Replace(
-            "[الأنماط.تدقيق]`nالتحسين = ٠`nالتحقق = خطأ",
-            "[الأنماط.تدقيق]`nالتحسين = ٠`nالتحقق = صواب")
+            'التحقق = خطأ',
+            'التحقق = صواب')
         [IO.File]::WriteAllText($multiManifestPath, $invalidVerifyProfile, $utf8NoBom)
         Invoke-ExpectedExitCode $takween @('خطة', '--جسون', '--نمط', 'تدقيق', 'تطبيق') 1 `
             'verify with optimization zero rejection' | Out-Null
