@@ -9,8 +9,9 @@
 - **آخر تحديث:** 2026-07-18
 - **الإصدار المنشور الحالي:** `0.1.0`
 - **خط أساس مساحة Eco:** Baa `0.6.0`
-- **الحالة:** أغلقت بوابة 0.2 هندسيا على Windows وLinux؛ يبقى الإصدار المنشور
-  `0.1.0` إلى أن تقطع حزمة إصدار مستقلة.
+- **الحالة:** أغلقت بوابة 0.4 الهندسية الأساسية على Windows وLinux؛ يبقى
+  الإصدار المنشور `0.1.0` إلى أن تقطع حزمة إصدار مستقلة. تظل بنود 0.3 المؤجلة
+  (globs والترحيل وتكامل Qalam) مراحل مستقلة ولا تدخل هذا الإغلاق.
 
 ## قرارات ثابتة
 
@@ -95,6 +96,12 @@
 [`2b9c032`](https://github.com/OmarAglan/Takween/commit/2b9c032107dad0ce35d35b6c011398d1279925eb)
 اشتقاق المفتاح والإيصالات واختبارات invalidation/hit. نجح
 [Takween cross-platform smoke رقم 29643531440](https://github.com/OmarAglan/Takween/actions/runs/29643531440)
+على `windows-latest` و`ubuntu-latest`.
+
+**إيصال مساحة العمل وإغلاق 0.4:** نفذ commit
+[`d2d1f7a`](https://github.com/OmarAglan/Takween/commit/d2d1f7aacf4a53e1758d1a3b1318b007772c4cc3)
+الفهرس والاختيار والعزل وتمرير الأكواد واختبارات الضغط. نجح
+[Takween cross-platform smoke رقم 29644762434](https://github.com/OmarAglan/Takween/actions/runs/29644762434)
 على `windows-latest` و`ubuntu-latest`.
 
 ## 0.5 — اعتماديات محلية وملف قفل

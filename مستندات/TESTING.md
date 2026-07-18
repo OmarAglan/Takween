@@ -16,7 +16,8 @@
 10. Pure Deterministic Build Plan
 11. Target DAG + Cycle Detection
 12. Typed Extensible Profiles
-13. Multi-Package Workspace Selection
+13. Deterministic Content-Addressed Cache
+14. Multi-Package Workspace Selection
 
 ## حالات أساسية
 
@@ -169,6 +170,14 @@ dependency-first، ودمج مصادر المكتبات انتقائيا، وك�
 `8b254861e26a9ae643723834292118a5816a40f8`. شمل `تطوير/إصدار`، وoverride
 العربي والتوافقي، والنمط المخصص، ورفض الهوية/التكرار/التركيب غير الصالح، وملكية
 `profile` داخل `takween-build-plan-v1`.
+
+إيصال مساحة العمل وإغلاق بوابة 0.4 الهندسية رقم
+[29644762434](https://github.com/OmarAglan/Takween/actions/runs/29644762434)
+بتاريخ 2026-07-18 نجح على `windows-latest` و`ubuntu-latest` عند commit
+`d2d1f7aacf4a53e1758d1a3b1318b007772c4cc3`. شمل
+`takween-workspace-v1`، والاختيار الفردي/الكلي، وcwd عربية ذات مسافة و`&`،
+وتمرير profile/locked، وملكية parser عبر 200 process، والحفاظ على أكواد الخروج
+والتوقف عند أول فشل.
 
 ## سيناريو المثبت (يدوي)
 1. شغّل `scripts\build_installer.ps1`.
