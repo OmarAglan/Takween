@@ -45,6 +45,10 @@
 - ينفّذ بناء فعلي عبر `baa` ويولّد الناتج حسب `المخرج + الاسم + النوع`.
 - يفعّل `--incremental` ويكتب الكاش في `المخرج/.takween-cache`.
 - يكتب `المخرج/build-manifest.json` وفق schema 1 من Baa.
+- يكتب `المخرج/build-cache.json` وفق `takween-content-cache-v1`، ومفتاح
+  SHA-256 ودليله canonical تحت `.takween-cache/takween-content`.
+- hit في هذا الإيصال يعني أن كل وحدات Baa أصابت كاش الكائنات؛ الربط ينفذ
+  ويظهر `link_executed=true`.
 - يطبق النمط المختار: `تطوير` مدمج كـ`-O1 --verify`، و`إصدار`
   كـ`-O2 --verify`، أو نمط عربي مخصص typed من البيان.
 - يحل `يعتمد_على` كـDAG أهداف؛ يضيف مكتبات الإغلاق المتعدي بترتيب

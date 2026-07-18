@@ -232,6 +232,47 @@ try {
         if ($firstBuildData.schema -ne 1 -or -not $firstBuildData.incremental) {
             throw 'build manifest does not expose schema 1 incremental state.'
         }
+        $contentCachePath = Join-Path $buildDirectory 'build-cache.json'
+        if (-not (Test-Path -LiteralPath $contentCachePath)) {
+            throw 'build did not emit takween-content-cache-v1.'
+        }
+        $firstCacheData = Get-Content -Raw -Encoding utf8 -LiteralPath $contentCachePath |
+            ConvertFrom-Json
+        if ($firstCacheData.schema_version -ne 'takween-content-cache-v1' -or
+            $firstCacheData.scope -ne 'baa-object-units' -or
+            $firstCacheData.compiler_version -ne [string]$targetInfo.compiler_version -or
+            $firstCacheData.baa_target -ne [string]$targetInfo.selected_target -or
+            $firstCacheData.units -lt 1 -or
+            -not $firstCacheData.cache.reusable -or
+            $firstCacheData.cache.hit -or
+            -not $firstCacheData.link_executed -or
+            $firstCacheData.key -notmatch '^[0-9a-f]{64}$') {
+            throw 'first content-cache receipt has invalid identity or miss state.'
+        }
+        $contentCacheDirectory = Join-Path $buildDirectory '.takween-cache/takween-content'
+        $identityReceipt = Join-Path $contentCacheDirectory ($firstCacheData.key + '.json')
+        $keyEvidence = Join-Path $contentCacheDirectory ($firstCacheData.key + '.key')
+        if (-not (Test-Path -LiteralPath $identityReceipt) -or
+            -not (Test-Path -LiteralPath $keyEvidence)) {
+            throw 'content-addressed identity receipt or canonical key evidence is missing.'
+        }
+        $identityData = Get-Content -Raw -Encoding utf8 -LiteralPath $identityReceipt |
+            ConvertFrom-Json
+        if ($identityData.key -ne $firstCacheData.key -or
+            $null -ne $identityData.cache -or
+            $null -ne $identityData.link_executed) {
+            throw 'immutable content identity receipt contains mutable cache status.'
+        }
+        $identityHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $identityReceipt).Hash
+        $keyEvidenceHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $keyEvidence).Hash
+        $keyEvidenceText = Get-Content -Raw -Encoding utf8 -LiteralPath $keyEvidence
+        if ($keyEvidenceText -notmatch 'takween-content-key-v1' -or
+            $keyEvidenceText -notmatch 'argv_content_sha256' -or
+            $keyEvidenceText -notmatch 'dependency_hash' -or
+            $keyEvidenceText -notmatch 'dependency_sha256' -or
+            $keyEvidenceText.Contains($tempRoot)) {
+            throw 'canonical key evidence is incomplete or leaks the absolute workspace path.'
+        }
 
         Invoke-ExpectedSuccess $takween @('بناء') 'Arabic incremental rebuild workflow' | Out-Null
         $secondBuildData = Get-Content -Raw -Encoding utf8 -LiteralPath $buildManifest | ConvertFrom-Json
@@ -239,6 +280,36 @@ try {
         if ($cacheHits.Count -lt 1) {
             throw 'incremental rebuild did not report a cache hit.'
         }
+        $secondCacheData = Get-Content -Raw -Encoding utf8 -LiteralPath $contentCachePath |
+            ConvertFrom-Json
+        if ($secondCacheData.key -ne $firstCacheData.key -or
+            -not $secondCacheData.cache.hit -or
+            -not $secondCacheData.cache.reusable) {
+            throw 'unchanged rebuild did not preserve the content key and aggregate cache hit.'
+        }
+        if ((Get-FileHash -Algorithm SHA256 -LiteralPath $identityReceipt).Hash -ne
+                $identityHash -or
+            (Get-FileHash -Algorithm SHA256 -LiteralPath $keyEvidence).Hash -ne
+                $keyEvidenceHash) {
+            throw 'unchanged rebuild changed immutable identity or canonical key evidence bytes.'
+        }
+
+        $originalSourceText = Get-Content -Raw -Encoding utf8 -LiteralPath $sourcePath.FullName
+        $changedSourceText = $originalSourceText.Replace(
+            'مرحباً من تكوين',
+            'مرحباً من كاش تكوين')
+        if ($changedSourceText -eq $originalSourceText) {
+            throw 'unable to prepare the source-content cache invalidation probe.'
+        }
+        [IO.File]::WriteAllText($sourcePath.FullName, $changedSourceText, $utf8NoBom)
+        Invoke-ExpectedSuccess $takween @('بناء') 'source-content cache invalidation' | Out-Null
+        $changedCacheData = Get-Content -Raw -Encoding utf8 -LiteralPath $contentCachePath |
+            ConvertFrom-Json
+        if ($changedCacheData.key -eq $firstCacheData.key -or
+            $changedCacheData.cache.hit) {
+            throw 'source-content change did not invalidate the aggregate content key.'
+        }
+        [IO.File]::WriteAllText($sourcePath.FullName, $originalSourceText, $utf8NoBom)
 
         Invoke-ExpectedSuccess $takween @('تشغيل') 'Arabic run workflow' | Out-Null
         Invoke-ExpectedSuccess $takween @('تنظيف') 'Arabic clean workflow' | Out-Null
@@ -312,6 +383,92 @@ try {
 
         $v1LockPath = Join-Path $v1Root 'تكوين.قفل'
         $v1LockHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $v1LockPath).Hash
+        $v1ContentCachePath = Join-Path $v1BuildDirectory 'build-cache.json'
+        if (-not (Test-Path -LiteralPath $v1ContentCachePath)) {
+            throw 'v1 build did not emit its aggregate content-cache receipt.'
+        }
+        $v1FirstCache = Get-Content -Raw -Encoding utf8 -LiteralPath $v1ContentCachePath |
+            ConvertFrom-Json
+        if ($v1FirstCache.schema_version -ne 'takween-content-cache-v1' -or
+            $v1FirstCache.profile.name -ne 'تطوير' -or
+            $v1FirstCache.profile.optimization -ne 1 -or
+            -not $v1FirstCache.profile.verify -or
+            $v1FirstCache.lock_sha256 -ne $v1LockHash.ToLowerInvariant() -or
+            $v1FirstCache.units -ne @($v1BuildData.units).Count) {
+            throw 'v1 content-cache receipt does not own profile, lock, or unit identity.'
+        }
+        $v1InitialKey = [string]$v1FirstCache.key
+
+        Invoke-ExpectedSuccess $takween @('build') 'v1 unchanged aggregate cache identity' | Out-Null
+        $v1SecondCache = Get-Content -Raw -Encoding utf8 -LiteralPath $v1ContentCachePath |
+            ConvertFrom-Json
+        if ($v1SecondCache.key -ne $v1InitialKey -or
+            $v1SecondCache.cache.reusable -or
+            $v1SecondCache.cache.hit) {
+            throw 'verified v1 rebuild did not preserve identity and expose Baa cache bypass.'
+        }
+
+        $headerPath = Join-Path $v1Root 'include/app_api.baahd'
+        $originalHeader = Get-Content -Raw -Encoding utf8 -LiteralPath $headerPath
+        [IO.File]::WriteAllText(
+            $headerPath,
+            $originalHeader + "`n// فحص تغيير الرأس`n",
+            $utf8NoBom)
+        Invoke-ExpectedSuccess $takween @('build') 'header-content cache invalidation' | Out-Null
+        $headerCache = Get-Content -Raw -Encoding utf8 -LiteralPath $v1ContentCachePath |
+            ConvertFrom-Json
+        if ($headerCache.key -eq $v1InitialKey -or $headerCache.cache.hit) {
+            throw 'header-content change did not invalidate the aggregate content key.'
+        }
+        [IO.File]::WriteAllText($headerPath, $originalHeader, $utf8NoBom)
+
+        $packageSourcePath = Join-Path $v1Root 'lib/src/lib.baa'
+        $originalPackageSource = Get-Content -Raw -Encoding utf8 -LiteralPath $packageSourcePath
+        $changedPackageSource = $originalPackageSource.Replace('٤٢', '٤٣')
+        if ($changedPackageSource -eq $originalPackageSource) {
+            throw 'unable to prepare the package-content cache invalidation probe.'
+        }
+        [IO.File]::WriteAllText($packageSourcePath, $changedPackageSource, $utf8NoBom)
+        Invoke-ExpectedSuccess $takween @('build') 'package-content cache invalidation' | Out-Null
+        $packageCache = Get-Content -Raw -Encoding utf8 -LiteralPath $v1ContentCachePath |
+            ConvertFrom-Json
+        if ($packageCache.key -eq $v1InitialKey -or $packageCache.cache.hit) {
+            throw 'path-package content change did not invalidate the aggregate content key.'
+        }
+        [IO.File]::WriteAllText($packageSourcePath, $originalPackageSource, $utf8NoBom)
+
+        Invoke-ExpectedSuccess $takween @('build', '--نمط', 'إصدار') `
+            'profile cache invalidation' | Out-Null
+        $releaseCache = Get-Content -Raw -Encoding utf8 -LiteralPath $v1ContentCachePath |
+            ConvertFrom-Json
+        if ($releaseCache.key -eq $v1InitialKey -or
+            $releaseCache.profile.name -ne 'إصدار' -or
+            $releaseCache.profile.optimization -ne 2 -or
+            -not $releaseCache.profile.verify) {
+            throw 'profile flags did not participate in the aggregate content key.'
+        }
+
+        Invoke-ExpectedSuccess $takween @('build', '--نمط', 'سريع') `
+            'cacheable custom profile miss' | Out-Null
+        $quickFirstCache = Get-Content -Raw -Encoding utf8 -LiteralPath $v1ContentCachePath |
+            ConvertFrom-Json
+        if ($quickFirstCache.profile.name -ne 'سريع' -or
+            $quickFirstCache.profile.optimization -ne 1 -or
+            $quickFirstCache.profile.verify -or
+            -not $quickFirstCache.cache.reusable -or
+            $quickFirstCache.cache.hit) {
+            throw 'cacheable custom profile did not report its first aggregate miss.'
+        }
+        Invoke-ExpectedSuccess $takween @('build', '--نمط', 'سريع') `
+            'cacheable custom profile hit' | Out-Null
+        $quickSecondCache = Get-Content -Raw -Encoding utf8 -LiteralPath $v1ContentCachePath |
+            ConvertFrom-Json
+        if ($quickSecondCache.key -ne $quickFirstCache.key -or
+            -not $quickSecondCache.cache.reusable -or
+            -not $quickSecondCache.cache.hit) {
+            throw 'cacheable custom profile did not produce an aggregate hit.'
+        }
+
         $originalV1Manifest = Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $v1Root 'مشروع.تكوين')
         Invoke-ExpectedSuccess $takween @('check', '--locked') 'matching locked path resolution' | Out-Null
         if ((Get-FileHash -Algorithm SHA256 -LiteralPath $v1LockPath).Hash -ne $v1LockHash) {
