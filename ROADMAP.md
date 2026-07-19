@@ -110,11 +110,11 @@
 [`4fe634f`](https://github.com/OmarAglan/Takween/commit/4fe634f92abf9658a21b6ce5bf80b91e08958877)
 اختيار نَظْم الافتراضي والرجوع الصريح إلى غاز وتثبيت مراجعات Baa/Nazm.
 أعاد commit
-[`bc2eccc`](https://github.com/OmarAglan/Takween/commit/bc2eccc7b126adbfaa6cb472d61daf4607c6c59a)
-تثبيت smoke على مرشح باء الدقيق `9efbcc4...`. نجح
-[smoke رقم 29681669191](https://github.com/OmarAglan/Takween/actions/runs/29681669191)
+[`da8378e`](https://github.com/OmarAglan/Takween/commit/da8378e097ef0f98acd19bfc76da7acf445547af)
+تثبيت smoke على مرشح باء الدقيق `661edd9...` ونَظْم `7236491...`. نجح
+[smoke رقم 29689709002](https://github.com/OmarAglan/Takween/actions/runs/29689709002)
 على Windows وLinux بعد نجاح
-[قبول Baa/Nazm رقم 29680127124](https://github.com/OmarAglan/Baa/actions/runs/29680127124).
+[قبول Baa/Nazm رقم 29687846586](https://github.com/OmarAglan/Baa/actions/runs/29687846586).
 
 ## 0.5 — اعتماديات محلية وملف قفل
 
