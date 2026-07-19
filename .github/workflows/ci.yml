@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: OmarAglan/Baa
-          ref: 5d3f00cb94b653afb213f66947a8a439051e18bd
+          ref: 9efbcc417a7a67bfb6928921f2257a872c25160a
           path: Baa
 
       - name: Check out Nazm
