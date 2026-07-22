@@ -120,8 +120,10 @@
 **امتداد بصمة نظم والكاش:** يثبت workflow الحالي Baa
 `4e250dad97d9d64de7f69ca96c8be48a34dc9ff5` ونظم
 `f7fcf8f6d2bf629daf708b3b6028e22c74683ce6`. يختبر أول miss ثم hit لوحدة باء
-مولدة ووحدة `.نظم` مباشرة، ويثبت أن البصمة الكاملة جزء من هوية المحتوى. يضاف
-رابط إيصال CI بعد وصول commit تكوين إلى نجاح نهائي على Windows وLinux.
+مولدة ووحدة `.نظم` مباشرة، ويثبت أن البصمة الكاملة جزء من هوية المحتوى. نفذ
+commit [`5cf82c3`](https://github.com/OmarAglan/Takween/commit/5cf82c3062f20d1dfa5584960cdf93120fe6ba96)
+العقد، ونجح [smoke رقم 29920746642](https://github.com/OmarAglan/Takween/actions/runs/29920746642)
+نهائيا على Windows وLinux.
 
 ## 0.5 — اعتماديات محلية وملف قفل
 
