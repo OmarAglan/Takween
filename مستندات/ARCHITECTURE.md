@@ -91,7 +91,8 @@ MVP الحالي مبني كخط أنابيب بسيط:
 3. **Planner** يحول النموذج إلى DAG وخطوات Baa موصوفة.
 4. **Executor** يشغل argv مباشرة ويجمع stdout/stderr/exit code دون shell، ويحافظ
    على أصل الكود ومرحلة العملية للمراسل.
-5. **Reporter** يعرض العربية للبشر وJSON لـ Qalam وCI.
+5. **Reporter** يعرض العربية للبشر، ويكتب `takween-build-events-v1` JSONL إلى
+   ملف مستهلك صريح حتى لا تختلط قناة الآلة بـstdout/stderr.
 6. **Cache** يستخدم build manifest وhash المحتوى ولا يخمن اعتماديات من النص.
 
 يجب أن تبقى هذه الطبقات قابلة للاختبار مستقلة؛ Qalam يستهلك CLI/JSON ولا يربط

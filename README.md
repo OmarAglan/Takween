@@ -69,6 +69,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 تكوين تشغيل      # run
 تكوين اختبار     # test: تشغيل كل أهداف الاختبار
 تكوين أهداف --جسون # targets: takween-targets-v1
+تكوين بناء --ملف_أحداث أحداث.jsonl # takween-build-events-v1 دون تلويث stdout
 تكوين تنظيف      # clean
 تكوين --إصدار    # version
 ```
@@ -155,6 +156,7 @@ commit = "0123456789abcdef0123456789abcdef01234567"
 - [خارطة الطريق](ROADMAP.md)
 - [صيغة الملف](مستندات/FORMAT.md)
 - [عقد CLI](مستندات/CLI.md)
+- [عقد أحداث البناء v1](مستندات/BUILD_EVENTS_V1.md)
 - [المعمارية](مستندات/ARCHITECTURE.md)
 - [المساهمة](مستندات/CONTRIBUTING.md)
 - [الاختبارات](مستندات/TESTING.md)

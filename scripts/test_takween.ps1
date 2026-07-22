@@ -211,7 +211,57 @@ try {
             throw 'check reported diagnostics for the generated valid project.'
         }
 
-        Invoke-ExpectedSuccess $takween @('بناء') 'Arabic build workflow' | Out-Null
+        Invoke-ExpectedExitCode $takween @('بناء', '--ملف_أحداث') 2 `
+            'missing build event path' | Out-Null
+        Invoke-ExpectedExitCode $takween `
+            @('بناء', '--ملف_أحداث', (Join-Path $tempRoot 'أ.jsonl'),
+              '--events-file', (Join-Path $tempRoot 'ب.jsonl')) 2 `
+            'duplicate build event option' | Out-Null
+
+        $buildEventsPath = Join-Path $tempRoot 'أحداث البناء.jsonl'
+        Invoke-ExpectedSuccess $takween @('بناء', '--ملف_أحداث', $buildEventsPath) `
+            'Arabic build workflow with structured events' | Out-Null
+        if (-not (Test-Path -LiteralPath $buildEventsPath)) {
+            throw 'build did not create the requested takween-build-events-v1 stream.'
+        }
+        $eventLines = @(Get-Content -Encoding utf8 -LiteralPath $buildEventsPath |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        if ($eventLines.Count -lt 3) {
+            throw 'build event stream is unexpectedly short.'
+        }
+        $buildEvents = @($eventLines | ForEach-Object { $_ | ConvertFrom-Json })
+        for ($eventIndex = 0; $eventIndex -lt $buildEvents.Count; $eventIndex++) {
+            $event = $buildEvents[$eventIndex]
+            if ($event.schema_version -ne 'takween-build-events-v1' -or
+                $event.sequence -ne ($eventIndex + 1) -or
+                $event.operation -ne 'build') {
+                throw "invalid build event envelope at index $eventIndex."
+            }
+        }
+        $firstEvent = $buildEvents[0]
+        $lastEvent = $buildEvents[-1]
+        if ($firstEvent.event -ne 'operation_started' -or
+            $firstEvent.status -ne 'started' -or
+            $lastEvent.event -ne 'operation_finished' -or
+            $lastEvent.status -ne 'succeeded' -or
+            $lastEvent.exit_code -ne 0) {
+            throw 'build event stream does not have the required successful operation boundaries.'
+        }
+        $compilerStarted = @($buildEvents | Where-Object {
+                $_.event -eq 'phase_started' -and $_.phase -eq 'compiler'
+            }).Count
+        $compilerFinished = @($buildEvents | Where-Object {
+                $_.event -eq 'phase_finished' -and $_.phase -eq 'compiler' -and
+                $_.status -eq 'succeeded' -and $_.exit_code -eq 0
+            }).Count
+        $executableArtifacts = @($buildEvents | Where-Object {
+                $_.event -eq 'artifact' -and $_.artifact.kind -eq 'executable' -and
+                -not [string]::IsNullOrWhiteSpace([string]$_.artifact.path)
+            }).Count
+        if ($compilerStarted -ne 1 -or $compilerFinished -ne 1 -or
+            $executableArtifacts -ne 1) {
+            throw 'build event stream is missing the compiler phase or executable artifact.'
+        }
         $buildManifestItem = Get-ChildItem -LiteralPath $tempRoot -Recurse -File -Filter 'build-manifest.json' |
             Select-Object -First 1
         if (-not $buildManifestItem) {
@@ -1184,8 +1234,30 @@ commit = "$gitCommit"
                     @{ Name = 'test'; Arguments = @('test', 'اختبار_أ') }
                 )
                 foreach ($command in $contractCommands) {
-                    Invoke-ExpectedExitCode $takween $command.Arguments $compilerExitCode `
+                    $failureEventsPath = Join-Path $multiRoot `
+                        ("events-$($command.Name)-$compilerExitCode.jsonl")
+                    $eventArguments = @($command.Arguments) + `
+                        @('--ملف_أحداث', $failureEventsPath)
+                    Invoke-ExpectedExitCode $takween $eventArguments $compilerExitCode `
                         "compiler-cli-v1 code $compilerExitCode through $($command.Name)" | Out-Null
+                    $failureEvents = @(Get-Content -Encoding utf8 -LiteralPath $failureEventsPath |
+                        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+                        ForEach-Object { $_ | ConvertFrom-Json })
+                    if ($failureEvents.Count -lt 2 -or
+                        $failureEvents[0].event -ne 'operation_started' -or
+                        $failureEvents[0].operation -ne $command.Name -or
+                        $failureEvents[-1].event -ne 'operation_finished' -or
+                        $failureEvents[-1].operation -ne $command.Name -or
+                        $failureEvents[-1].status -ne 'failed' -or
+                        $failureEvents[-1].exit_code -ne $compilerExitCode) {
+                        throw "failed $($command.Name) event stream lost compiler exit $compilerExitCode."
+                    }
+                    for ($eventIndex = 0; $eventIndex -lt $failureEvents.Count; $eventIndex++) {
+                        if ($failureEvents[$eventIndex].schema_version -ne 'takween-build-events-v1' -or
+                            $failureEvents[$eventIndex].sequence -ne ($eventIndex + 1)) {
+                            throw "failed $($command.Name) event stream has invalid ordering."
+                        }
+                    }
                 }
             }
         } finally {
