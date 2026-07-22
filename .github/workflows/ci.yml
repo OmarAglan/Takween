@@ -24,14 +24,14 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: OmarAglan/Baa
-          ref: 661edd9b05ecdda7fca75905263dc7dfa365693b
+          ref: 4e250dad97d9d64de7f69ca96c8be48a34dc9ff5
           path: Baa
 
       - name: Check out Nazm
         uses: actions/checkout@v5
         with:
           repository: OmarAglan/Nazm
-          ref: 7236491528567832d25eb0908cec9eac39831779
+          ref: f7fcf8f6d2bf629daf708b3b6028e22c74683ce6
           path: Nazm
 
       - name: Add Windows MinGW toolchain

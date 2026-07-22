@@ -293,9 +293,11 @@ try {
             $firstCacheData.compiler_version -ne [string]$targetInfo.compiler_version -or
             $firstCacheData.baa_target -ne [string]$targetInfo.selected_target -or
             $firstCacheData.units -lt 1 -or
-            $firstCacheData.cache.reusable -or
+            -not $firstCacheData.cache.reusable -or
             $firstCacheData.cache.hit -or
             -not $firstCacheData.link_executed -or
+            $firstCacheData.assembler_fingerprint -notmatch `
+                '^nazm-api-v1;version=[^;]+;capabilities=nazm-capabilities-v1:[0-9a-f]{64}$' -or
             $firstCacheData.key -notmatch '^[0-9a-f]{64}$') {
             throw 'first content-cache receipt has invalid identity or miss state.'
         }
@@ -309,6 +311,7 @@ try {
         $identityData = Get-Content -Raw -Encoding utf8 -LiteralPath $identityReceipt |
             ConvertFrom-Json
         if ($identityData.key -ne $firstCacheData.key -or
+            $identityData.assembler_fingerprint -ne $firstCacheData.assembler_fingerprint -or
             $null -ne $identityData.cache -or
             $null -ne $identityData.link_executed) {
             throw 'immutable content identity receipt contains mutable cache status.'
@@ -320,6 +323,7 @@ try {
             $keyEvidenceText -notmatch 'argv_content_sha256' -or
             $keyEvidenceText -notmatch 'dependency_hash' -or
             $keyEvidenceText -notmatch 'dependency_sha256' -or
+            $keyEvidenceText -notmatch 'assembler_fingerprint' -or
             $keyEvidenceText.Contains($tempRoot)) {
             throw 'canonical key evidence is incomplete or leaks the absolute workspace path.'
         }
@@ -327,15 +331,17 @@ try {
         Invoke-ExpectedSuccess $takween @('بناء') 'Arabic incremental rebuild workflow' | Out-Null
         $secondBuildData = Get-Content -Raw -Encoding utf8 -LiteralPath $buildManifest | ConvertFrom-Json
         $cacheHits = @($secondBuildData.units | Where-Object { $_.cache.hit })
-        if ($cacheHits.Count -ne 0) {
-            throw 'Default Nazm rebuild reported an unsupported incremental cache hit.'
+        if ($cacheHits.Count -lt 1) {
+            throw 'Default Nazm rebuild did not reuse a fingerprinted object.'
         }
         $secondCacheData = Get-Content -Raw -Encoding utf8 -LiteralPath $contentCachePath |
             ConvertFrom-Json
         if ($secondCacheData.key -ne $firstCacheData.key -or
-            $secondCacheData.cache.hit -or
-            $secondCacheData.cache.reusable) {
-            throw 'Default Nazm rebuild did not preserve identity with cache reuse disabled.'
+            -not $secondCacheData.cache.hit -or
+            -not $secondCacheData.cache.reusable -or
+            $secondCacheData.assembler_fingerprint -ne
+                $firstCacheData.assembler_fingerprint) {
+            throw 'Default Nazm rebuild did not preserve its fingerprinted cache identity.'
         }
         if ((Get-FileHash -Algorithm SHA256 -LiteralPath $identityReceipt).Hash -ne
                 $identityHash -or
@@ -596,7 +602,9 @@ try {
         $nazmManifestPath = Join-Path $nazmRoot 'build/build-manifest.json'
         $nazmManifest = Get-Content -Raw -Encoding utf8 -LiteralPath $nazmManifestPath |
             ConvertFrom-Json
-        if ($nazmManifest.assembler -ne 'nazm') {
+        if ($nazmManifest.assembler -ne 'nazm' -or
+            $nazmManifest.assembler_fingerprint -notmatch `
+                '^nazm-api-v1;version=[^;]+;capabilities=nazm-capabilities-v1:[0-9a-f]{64}$') {
             throw 'Takween did not map المجمع = "نظم" to the Baa Nazm assembler policy.'
         }
         $nazmUnits = @($nazmManifest.units)
@@ -605,6 +613,21 @@ try {
             @($nazmUnits | Where-Object { $_.source_kind -eq 'baa' }).Count -ne 1 -or
             @($nazmUnits | Where-Object { $_.source_kind -eq 'nazm' }).Count -ne 1) {
             throw 'Mixed Baa/Nazm roots did not produce the expected per-unit assembler receipts.'
+        }
+        if (@($nazmUnits | Where-Object { -not $_.cache.enabled }).Count -ne 0 -or
+            @($nazmUnits | Where-Object { $_.cache.hit }).Count -ne 0) {
+            throw 'The first mixed Baa/Nazm build did not expose fingerprinted cache misses.'
+        }
+
+        Invoke-ExpectedSuccess $takween @('build') 'fingerprinted mixed Nazm cache rebuild' | Out-Null
+        $nazmCachedManifest = Get-Content -Raw -Encoding utf8 -LiteralPath $nazmManifestPath |
+            ConvertFrom-Json
+        $nazmCachedUnits = @($nazmCachedManifest.units)
+        if ($nazmCachedManifest.assembler_fingerprint -ne
+                $nazmManifest.assembler_fingerprint -or
+            $nazmCachedUnits.Count -ne 2 -or
+            @($nazmCachedUnits | Where-Object { -not $_.cache.hit }).Count -ne 0) {
+            throw 'The mixed Baa/Nazm rebuild did not reuse both fingerprinted objects.'
         }
         $nazmLock = Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $nazmRoot 'تكوين.قفل') |
             ConvertFrom-Json
