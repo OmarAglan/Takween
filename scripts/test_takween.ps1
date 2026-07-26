@@ -1159,6 +1159,10 @@ commit = "$gitCommit"
             $planData.profile.name -ne 'تطوير' -or
             $planData.profile.optimization -ne 1 -or
             -not $planData.profile.verify -or
+            $planData.working_directory -ne '.' -or
+            (@($planData.source_files) -join '|') -ne
+                '././src/app.baa|././src/library.baa' -or
+            $null -eq $planData.include_paths -or
             $planData.argv[0] -ne 'baa' -or
             $planData.argv -notcontains '--assembler=nazm' -or
             $planData.argv -notcontains '-O1' -or

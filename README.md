@@ -92,6 +92,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 دون إنشاء مجلد المخرج أو تشغيل Baa. المخطط نقي بعد اكتمال الاكتشاف وحل
 الاعتماديات، ويثبت `--assembler=nazm` عندما لا يختار البيان مجمعا أو يكتب
 `المجمع = "نظم"`، ويثبت `--assembler=gas` فقط عند `المجمع = "غاز"`.
+ويعرض كذلك `working_directory` و`source_files` و`include_paths` كحقول مهيكلة
+تستهلكها أدوات مثل Baa-LSP دون تحليل البيان أو تفكيك `argv`.
 
 النمط الافتراضي `تطوير` يثبت `-O1 --verify`، و`إصدار` يثبت `-O2 --verify`.
 يمكن للبيان تخصيصهما أو إضافة `[الأنماط.<اسم_عربي>]` بحقل `التحسين` typed
