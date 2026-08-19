@@ -1,35 +1,51 @@
-﻿# Installer Guide (Windows)
+# مثبت تكوين على ويندوز
 
-## الهدف
-توفير تجربة تثبيت سهلة لمستخدمي Takween على ويندوز بدون إعدادات يدوية معقدة.
+## عقد التوزيع
+
+ينتج تكوين حزمة مستقلة باسم
+`takween-setup-0.1.0-x64.exe` وملف SHA-256 مجاور. لا تضم الحزمة باء أو نظم؛
+تكتشفهما كأداتين مستقلتين من `PATH` عند بناء المشروع.
+
+- التثبيت الافتراضي لكل مستخدمي الجهاز في `Program Files\Takween`.
+- يقبل `/CURRENTUSER` للتثبيت في نطاق المستخدم دون صلاحيات مدير.
+- يثبت `تكوين.exe` والأمر التوافقي `takween.exe` في `{app}\bin`.
+- يضيف `{app}\bin` إلى PATH تلقائيا ويسجل ملكيته.
+- يضبط `TAKWEEN_HOME` فقط إذا كان فارغا أو مملوكا لتثبيت تكوين سابق.
+- لا يستدعي shell أثناء اكتشاف باء أو نظم.
+- لا يحذف عند الإزالة إلا PATH والمتغيرات التي يملكها المثبت وتظل مساوية
+  لمسارات التثبيت.
 
 ## متطلبات البناء
-- Baa compiler (`baa.exe`) في PATH
-- Inno Setup 6 (`ISCC.exe`)
 
-## بناء ثنائي Takween
+- باء 0.6.0 مع `target-info-v1` ومكتبة `baalib`.
+- نظم المثبت أو المبني محليا.
+- Inno Setup 6.
+
+## بناء الحزمة
+
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\build_takween.ps1 -Version 0.1.0
+.\scripts\build_installer.ps1 -Version 0.1.0 `
+  -BaaPath C:\path\to\baa.exe `
+  -BaaStdlibPath C:\path\to\stdlib `
+  -NazmPath C:\path\to\nazm.exe
 ```
 
-## بناء المثبت
+النواتج:
+
+- `dist\bin\تكوين.exe`
+- `dist\bin\takween.exe`
+- `dist\installer\takween-setup-0.1.0-x64.exe`
+- `dist\installer\takween-setup-0.1.0-x64.exe.sha256`
+
+## بوابة دورة الحياة
+
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 0.1.0
+.\scripts\test_installer.ps1 `
+  -BaaDirectory C:\path\to\baa-bin `
+  -NazmDirectory C:\path\to\nazm-bin
 ```
 
-إذا كان `ISCC.exe` خارج المسار الافتراضي:
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 0.1.0 -IsccPath "C:\path\to\ISCC.exe"
-```
-
-## الناتج
-- `dist\bin\تكوين.exe` (primary)
-- `dist\bin\takween.exe` (alias)
-- `dist\installer\takween-setup-<version>.exe`
-
-## سلوك المثبت
-- يثبت Takween في `{localappdata}\Programs\Takween`
-- يضيف `{app}\bin` إلى PATH للمستخدم الحالي (اختياري Task)
-- ينشئ متغير البيئة `TAKWEEN_HOME`
-- يعرض تنبيهاً إذا `baa.exe` غير موجود في PATH
-- يزيل PATH entry و`TAKWEEN_HOME` عند إلغاء التثبيت
+تتحقق البوابة من التجزئة، والتثبيت في نطاق المستخدم، والأمرين العربي
+والتوافقي، وملكية PATH و`TAKWEEN_HOME`، ثم تنشئ مشروعا في مسار عربي ذي
+مسافات وتنفذ `تهيئة` و`فحص` و`بناء` و`تشغيل` و`تنظيف`. أخيرا
+تزيل تكوين وتتحقق من عدم بقاء ملفات أو حالة مملوكة.

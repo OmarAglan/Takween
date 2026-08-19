@@ -32,6 +32,9 @@
 - [x] parser صارم لصيغة `مفتاح: قيمة`.
 - [x] `بناء/build` و`تشغيل/run` و`تنظيف/clean` على ويندوز.
 - [x] مثبت Inno Setup وaliases عربية/إنجليزية.
+- [x] تحديث المثبت إلى عقد المنظومة: تثبيت لكل الجهاز مع `/CURRENTUSER`،
+      PATH مملوك وآمن، اكتشاف باء ونظم دون تضمينهما، SHA-256، ودورة
+      install/init/check/build/run/clean/uninstall في CI.
 - [x] إضافة `--إصدار/--version` وعقد تحقق آلي أساسي.
 - [x] توحيد أكواد الخروج مع `compiler-cli-v1` من `0` إلى `5` وتمرير كود Baa كما هو.
 - [x] إثبات check/build/run/clean عبر runner آلي على Baa 0.6.0.

@@ -5,7 +5,7 @@
 > The Arabic-first build system for Baa.
 
 ## الحالة الحالية (Current Status)
-- **آخر تحديث:** 2026-07-18
+- **آخر تحديث:** 2026-08-19
 - **إصدار تكوين:** `0.1.0`.
 - **خط أساس باء في مساحة Eco:** `0.6.0`؛ runner ‏init/check/build/run/test/clean/targets
   وخطة البناء وبيان v1 واعتماديات المسار وGit المثبتة يمر بهذا المصرّف على
@@ -32,22 +32,30 @@
 - تثبيت سهل للمستخدم النهائي (Installer + PATH) على ويندوز.
 
 ## التثبيت للمستخدم النهائي (Windows)
-1. شغّل مثبت Takween (`takween-setup-<version>.exe`).
-2. فعّل خيار إضافة Takween إلى PATH أثناء التثبيت.
-3. تأكد بعد التثبيت:
+1. ثبّت نظم ثم باء، وتأكد أنهما ظاهران في `PATH`.
+2. شغّل `takween-setup-0.1.0-x64.exe`. يثبت لكل مستخدمي الجهاز افتراضيا؛
+   استخدم `/CURRENTUSER` للتثبيت دون صلاحيات مدير.
+3. يضيف المثبت `تكوين.exe` وalias ‏`takween.exe` إلى `PATH` تلقائيا،
+   ولا يضم باء أو نظم أو ينسخهما.
+4. تحقق بعد فتح طرفية جديدة:
 
 ```powershell
-تكوين --مساعدة
+تكوين --إصدار
 baa --version
+نظم --إصدار
 ```
 
-> تكوين يعتمد على وجود `baa` في PATH وعلى عقد `--target-info=json` من Baa.
+> تكوين يكتشف `baa` و`نظم` من `PATH` ويعتمد على عقد
+> `--target-info=json` من باء.
 
 ## بناء المثبت (للمطورين)
 نستخدم **Inno Setup Compiler** لبناء مثبت ويندوز:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 0.1.0
+.\scripts\build_installer.ps1 -Version 0.1.0 `
+  -BaaPath C:\path\to\baa.exe `
+  -BaaStdlibPath C:\path\to\stdlib `
+  -NazmPath C:\path\to\nazm.exe
 ```
 
 لبناء binary مباشرة بمصرّف محدد وقابل لإعادة الإنتاج:
@@ -56,7 +64,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 .\scripts\build_takween.ps1 -Version 0.1.0 -BaaPath C:\path\to\baa.exe -BaaStdlibPath C:\path\to\stdlib
 ```
 
-- الملف الناتج: `dist\installer\takween-setup-<version>.exe`
+- الملفان الناتجان:
+  `dist\installer\takween-setup-0.1.0-x64.exe` وملف SHA-256 المجاور.
 - إذا كان `ISCC.exe` خارج المسار الافتراضي، مرره صراحة عبر `-IsccPath`.
 
 ## أوامر CLI (MVP)
