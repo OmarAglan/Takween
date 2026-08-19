@@ -89,7 +89,7 @@ function Wait-InstallerState {
     throw "Timed out waiting for $Description."
 }
 
-try {
+function Invoke-TakweenInstaller {
     $setupProcess = Start-Process -FilePath $Installer -ArgumentList @(
         "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-",
         "/CURRENTUSER", "/DIR=$InstallDirectory"
@@ -97,6 +97,10 @@ try {
     if ($setupProcess.ExitCode -ne 0) {
         throw "Takween installer failed with exit code $($setupProcess.ExitCode)."
     }
+}
+
+try {
+    Invoke-TakweenInstaller
     $installed = $true
     Wait-InstallerState "Takween installation" {
         (Test-Path -LiteralPath $takweenExecutable -PathType Leaf) -and
@@ -104,6 +108,7 @@ try {
         (Test-Path -LiteralPath $uninstaller -PathType Leaf) -and
         (Test-Path -LiteralPath $markerKey)
     }
+    Invoke-TakweenInstaller
 
     $pathValue = (Get-ItemProperty -Path "HKCU:\Environment" -Name Path).Path
     $pathMatches = @($pathValue -split ";" | Where-Object {
