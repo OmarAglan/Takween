@@ -24,14 +24,14 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: OmarAglan/Baa
-          ref: 3a1956ce53921fb033ba410bc3a31976adb4d4ca
+          ref: 3919bc2d8c53b8ecb87d146d2563e99f91e7a091
           path: Baa
 
       - name: Check out Nazm
         uses: actions/checkout@v5
         with:
           repository: OmarAglan/Nazm
-          ref: f7fcf8f6d2bf629daf708b3b6028e22c74683ce6
+          ref: 9d88cc1eb9cec61849a21103683604fe8fb915b8
           path: Nazm
 
       - name: Add Windows MinGW toolchain
@@ -89,20 +89,21 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: OmarAglan/Baa
-          ref: 3a1956ce53921fb033ba410bc3a31976adb4d4ca
+          ref: 3919bc2d8c53b8ecb87d146d2563e99f91e7a091
           path: Baa
       - name: Check out Nazm
         uses: actions/checkout@v5
         with:
           repository: OmarAglan/Nazm
-          ref: f7fcf8f6d2bf629daf708b3b6028e22c74683ce6
+          ref: 9d88cc1eb9cec61849a21103683604fe8fb915b8
           path: Nazm
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --no-progress -y
       - name: Add Windows MinGW toolchain
         shell: pwsh
-        run: "'C:\msys64\ucrt64\bin' | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append"
+        run: |
+          'C:\msys64\ucrt64\bin' | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - name: Build Baa and Nazm
         shell: pwsh
         run: |
