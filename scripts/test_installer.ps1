@@ -108,7 +108,17 @@ try {
         (Test-Path -LiteralPath $uninstaller -PathType Leaf) -and
         (Test-Path -LiteralPath $markerKey)
     }
+    $staleUpgradeFile = Join-Path $takweenBin "removed-by-upgrade.tmp"
+    [IO.File]::WriteAllText($staleUpgradeFile, "stale")
     Invoke-TakweenInstaller
+    if (Test-Path -LiteralPath $staleUpgradeFile) {
+        throw "Takween repair did not remove an obsolete owned payload file."
+    }
+    $marker = Get-ItemProperty -LiteralPath $markerKey
+    if ($marker.Version -ne '0.1.0' -or
+        $marker.InstallLocation -ine $InstallDirectory) {
+        throw 'Takween installer did not record its installed version and location.'
+    }
 
     $pathValue = (Get-ItemProperty -Path "HKCU:\Environment" -Name Path).Path
     $pathMatches = @($pathValue -split ";" | Where-Object {

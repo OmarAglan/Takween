@@ -45,6 +45,9 @@ ChangesEnvironment=yes
 SetupLogging=yes
 UsePreviousAppDir=yes
 UsePreviousLanguage=yes
+UsePreviousTasks=yes
+CloseApplications=yes
+RestartApplications=no
 UninstallDisplayIcon={app}\bin\{#MyAppExeName}
 UninstallDisplayName={#MyAppName} {#MyAppVersion}
 
@@ -60,6 +63,9 @@ Source: "CHANGELOG.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "ROADMAP.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "مستندات\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "أمثلة\*"; DestDir: "{app}\examples"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[InstallDelete]
+Type: filesandordirs; Name: "{app}\bin"
 
 [Icons]
 Name: "{autoprograms}\تكوين\دليل تكوين"; Filename: "{app}\README.md"
@@ -124,10 +130,17 @@ begin
 end;
 
 procedure ApplyTakweenEnvironment;
+var
+  Root: Integer;
 begin
   if EcoEnsurePathContains(ExpandConstant('{app}\bin')) then
     TakweenSetOwnedValue(TAKWEEN_PATH_OWNED_VALUE, True);
   EnsureTakweenHome;
+  TakweenRegistryRoot(Root);
+  RegWriteStringValue(Root, TAKWEEN_INSTALLER_KEY, 'InstallLocation',
+    ExpandConstant('{app}'));
+  RegWriteStringValue(Root, TAKWEEN_INSTALLER_KEY, 'Version',
+    '{#MyAppVersion}');
 end;
 
 function InstalledFileAt(const Root: Integer; const Key, RelativePath: string): Boolean;

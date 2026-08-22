@@ -196,8 +196,8 @@ try {
     try {
         Invoke-ExpectedSuccess $takween @('تهيئة') 'Arabic init workflow' | Out-Null
         $manifestPath = Get-ChildItem -LiteralPath $tempRoot -File | Select-Object -First 1
-        $sourcePath = Get-ChildItem -LiteralPath $tempRoot -Recurse -File -Filter '*.baa' |
-            Where-Object { $_.Extension -eq '.baa' } |
+        $sourcePath = Get-ChildItem -LiteralPath $tempRoot -Recurse -File |
+            Where-Object { $_.Extension -eq '.باء' } |
             Select-Object -First 1
         if (-not $manifestPath) { throw 'init did not create a project manifest.' }
         if (-not $sourcePath) { throw 'init did not create the main source.' }
