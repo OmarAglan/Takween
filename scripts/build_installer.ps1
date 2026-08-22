@@ -4,11 +4,21 @@ param(
     [string]$BaaStdlibPath = "",
     [string]$NazmPath = "",
     [string]$IsccPath = "",
+    [string]$SignToolName = "",
+    [string]$SignToolCommand = "",
     [switch]$SkipBuild
 )
 
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+if ([string]::IsNullOrWhiteSpace($SignToolName) -ne
+    [string]::IsNullOrWhiteSpace($SignToolCommand)) {
+    throw "Pass both -SignToolName and -SignToolCommand, or neither."
+}
+if (-not [string]::IsNullOrWhiteSpace($SignToolName) -and
+    $SignToolName -notmatch "^[A-Za-z0-9_-]+$") {
+    throw "SignToolName may contain only letters, digits, underscore, and hyphen."
+}
 $setupScript = Join-Path $root "setup.iss"
 $buildScript = Join-Path $PSScriptRoot "build_takween.ps1"
 
@@ -74,9 +84,17 @@ if ([string]::IsNullOrWhiteSpace($IsccPath) -or
     throw "Inno Setup 6 compiler was not found. Pass -IsccPath explicitly."
 }
 
+$isccArguments = @(
+    "/DMyAppVersion=$Version",
+    "/DTakweenBinaryDir=$binaryDirectory"
+)
+if (-not [string]::IsNullOrWhiteSpace($SignToolName)) {
+    $isccArguments += "/DInstallerSignTool=$SignToolName"
+    $isccArguments += "/S$SignToolName=$SignToolCommand"
+}
 Push-Location $root
 try {
-    & $IsccPath "/DMyAppVersion=$Version" "/DTakweenBinaryDir=$binaryDirectory" $setupScript
+    & $IsccPath @isccArguments $setupScript
     if ($LASTEXITCODE -ne 0) { throw "ISCC failed with exit code $LASTEXITCODE." }
 }
 finally {

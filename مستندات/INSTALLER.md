@@ -30,6 +30,10 @@
   -NazmPath C:\path\to\nazm.exe
 ```
 
+لإصدار Authenticode، أضف `-SignToolName releasesign` و
+`-SignToolCommand '<signtool command using $f>'`. يوقع البناء المثبت وبرنامج
+الإزالة ثم يحسب SHA-256 من الناتج الموقّع.
+
 النواتج:
 
 - `dist\bin\تكوين.exe`
