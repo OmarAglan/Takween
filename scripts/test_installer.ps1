@@ -136,15 +136,35 @@ try {
     $hadNazmOverride = Test-Path Env:BAA_NAZM
     $oldNazmOverride = $env:BAA_NAZM
     try {
-        $env:PATH = "$takweenBin;$BaaDirectory;$NazmDirectory;$env:SystemRoot\System32;$env:SystemRoot"
-        $env:BAA_HOME = $baaHome
-        $env:BAA_STDLIB = $baaStdlib
         $env:TAKWEEN_HOME = $InstallDirectory
-        Remove-Item Env:BAA_NAZM -ErrorAction SilentlyContinue
         Push-Location $projectDirectory
         try {
+            $env:PATH = "$takweenBin;$env:SystemRoot\System32;$env:SystemRoot"
+            Remove-Item Env:BAA_HOME -ErrorAction SilentlyContinue
+            Remove-Item Env:BAA_STDLIB -ErrorAction SilentlyContinue
+            Remove-Item Env:BAA_NAZM -ErrorAction SilentlyContinue
             & $takweenExecutable $initCommand
             if ($LASTEXITCODE -ne 0) { throw "Installed Takween init failed." }
+
+            $oldErrorActionPreference = $ErrorActionPreference
+            $ErrorActionPreference = "Continue"
+            try {
+                $missingBaaOutput = @(& $takweenExecutable $buildCommand 2>&1) -join "`n"
+                $missingBaaExitCode = $LASTEXITCODE
+            }
+            finally {
+                $ErrorActionPreference = $oldErrorActionPreference
+            }
+            if ($missingBaaExitCode -eq 0) {
+                throw "Installed Takween unexpectedly built without Baa or Nazm."
+            }
+            if ([string]::IsNullOrWhiteSpace($missingBaaOutput)) {
+                throw "Installed Takween did not explain its missing build dependencies."
+            }
+
+            $env:PATH = "$takweenBin;$BaaDirectory;$NazmDirectory;$env:SystemRoot\System32;$env:SystemRoot"
+            $env:BAA_HOME = $baaHome
+            $env:BAA_STDLIB = $baaStdlib
             & $takweenExecutable $checkCommand
             if ($LASTEXITCODE -ne 0) { throw "Installed Takween check failed." }
             & $takweenExecutable $buildCommand
