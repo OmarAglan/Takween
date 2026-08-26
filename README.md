@@ -1,5 +1,9 @@
 ﻿# تكوين (Takween)
 
+<p align="center">
+  <img src="resources/branding/takween-master-v1.png" width="144" alt="شعار تكوين">
+</p>
+
 > نظام البناء العربي الرسمي للغة **باء (Baa)**.
 > 
 > The Arabic-first build system for Baa.

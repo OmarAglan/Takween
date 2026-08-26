@@ -65,6 +65,15 @@ try {
         throw "Failed to build Takween (exit code $LASTEXITCODE)."
     }
 
+    if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
+        & (Join-Path $PSScriptRoot 'Set-WindowsExecutableIcon.ps1') `
+            -Executable $outputExeLegacy `
+            -Icon (Join-Path $root 'resources\branding\takween.ico')
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to embed the Takween application icon."
+        }
+    }
+
     Copy-Item -Force $outputExeLegacy $outputExeArabic
 }
 finally {
