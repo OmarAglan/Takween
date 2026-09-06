@@ -24,14 +24,14 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: OmarAglan/Baa
-          ref: 3919bc2d8c53b8ecb87d146d2563e99f91e7a091
+          ref: e330a81539dc23faf778859e73ae0dfc8e816102
           path: Baa
 
       - name: Check out Nazm
         uses: actions/checkout@v5
         with:
           repository: OmarAglan/Nazm
-          ref: 9d88cc1eb9cec61849a21103683604fe8fb915b8
+          ref: c78c993cfa3523d46d08443599e316a2a1f827ea
           path: Nazm
 
       - name: Add Windows MinGW toolchain
@@ -89,13 +89,13 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: OmarAglan/Baa
-          ref: 3919bc2d8c53b8ecb87d146d2563e99f91e7a091
+          ref: e330a81539dc23faf778859e73ae0dfc8e816102
           path: Baa
       - name: Check out Nazm
         uses: actions/checkout@v5
         with:
           repository: OmarAglan/Nazm
-          ref: 9d88cc1eb9cec61849a21103683604fe8fb915b8
+          ref: c78c993cfa3523d46d08443599e316a2a1f827ea
           path: Nazm
       - name: Install Inno Setup
         shell: pwsh

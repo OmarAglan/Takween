@@ -1,4 +1,4 @@
-; مثبت تكوين المستقل لويندوز.
+﻿; مثبت تكوين المستقل لويندوز.
 ; يكتشف باء ونظم من تثبيتهما المستقل وPATH ولا يضم نسخهما.
 
 #define MyAppId "{{9D321DC1-69B3-44F0-A52A-86DB6A6E0C97}"
@@ -36,6 +36,13 @@ SignedUninstaller=yes
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
+WizardSizePercent=110,110
+DisableWelcomePage=no
+WizardImageFile=installer\wizard-sidebar.png
+WizardSmallImageFile=installer\wizard-mark.png
+WizardImageStretch=yes
+LZMANumBlockThreads=1
+CompressionThreads=1
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
@@ -51,6 +58,17 @@ CloseApplications=yes
 RestartApplications=no
 UninstallDisplayIcon={app}\bin\{#MyAppExeName}
 UninstallDisplayName={#MyAppName} {#MyAppVersion}
+
+[LangOptions]
+DialogFontName=Segoe UI
+DialogFontSize=10
+WelcomeFontName=Segoe UI
+
+[Messages]
+arabic.WelcomeLabel1=من الفكرة إلى البرنامج
+arabic.WelcomeLabel2=تكوين لإنشاء المشاريع وبنائها واختبارها.%n%nيحتاج تكوين إلى باء ونظم لبناء برامجك.
+english.WelcomeLabel1=From idea to program
+english.WelcomeLabel2=Takween creates, builds and tests your projects.%n%nBaa and Nazm are required to build your programs.
 
 [Languages]
 Name: "arabic"; MessagesFile: "compiler:Languages\Arabic.isl"
@@ -77,6 +95,7 @@ Name: "{autoprograms}\تكوين\إزالة تكوين"; Filename: "{uninstallex
 Filename: "{app}\bin\{#MyAppExeName}"; Parameters: "--إصدار"; Description: "التحقق من إصدار تكوين"; Flags: postinstall skipifsilent unchecked runhidden
 
 [Code]
+#include "installer\windows_wizard.iss"
 #include "installer\windows_environment.iss"
 #include "installer\windows_scope_migration.iss"
 
@@ -197,7 +216,7 @@ begin
     ApplyTakweenEnvironment;
     EcoBroadcastEnvironmentChange;
     if not RunTakweenHealthProbe then
-      RaiseException('فشل فحص تكوين بعد التثبيت.');
+      EcoInstallFailed('فشل فحص تكوين بعد التثبيت.');
     if not WizardSilent then
     begin
       if BaaAvailable and NazmAvailable then
