@@ -905,6 +905,298 @@ try {
         $env:TAKWEEN_PACKAGE_INDEX = $oldPackageIndex
     }
 
+    $commandRoot = Join-Path $tempRoot 'package-commands'
+    $commandArchives = Join-Path $commandRoot 'archives'
+    New-Item -ItemType Directory -Force $commandArchives | Out-Null
+    $namespacedName = 'أدوات/نص_مساعد'
+    $decomposedNamespace = [string][char]0x0627 + [char]0x0654 + 'دوات'
+    $commandIndexRows = [Collections.Generic.List[string]]::new()
+    $helperDigests = @{}
+    foreach ($version in @('1.0.0', '1.1.0', '2.0.0-beta.1')) {
+        $helperValue = $version.Replace('.', '').Substring(0, 3)
+        $helperManifest = @"
+[المشروع]
+الاسم = "$namespacedName"
+الإصدار = "$version"
+إصدار_باء = ">=0.6.0 <0.8.0"
+
+[الأهداف.نص_مساعد]
+النوع = "مكتبة"
+المدخل = "مصدر/مساعد.baa"
+مسارات_التضمين = ["تضمين"]
+
+[البناء]
+المخرج = "build"
+النمط = "تطوير"
+
+[الأنماط.تطوير]
+التحسين = 1
+التحقق = خطأ
+"@
+        $helperArchive = Join-Path $commandArchives ("نص_مساعد-$version.tkw")
+        New-TakweenArchive $helperArchive @{
+            'مشروع.تكوين' = $utf8NoBom.GetBytes($helperManifest)
+            'تضمين/واجهة_مساعد.baahd' = $utf8NoBom.GetBytes("صحيح قيمة_مساعد().`n")
+            'مصدر/مساعد.baa' = $utf8NoBom.GetBytes("صحيح قيمة_مساعد() { إرجع $helperValue. }`n")
+        }
+        $helperDigests[$version] = (Get-FileHash -Algorithm SHA256 -LiteralPath $helperArchive).Hash.ToLowerInvariant()
+        $commandIndexRows.Add("$namespacedName`t$version`t$($helperDigests[$version])`t$helperArchive")
+    }
+    foreach ($version in @('1.0.0', '1.2.0+build.1', '2.0.0')) {
+        $commandIndexRows.Add(
+            "مكتبة_أرشيف`t$version`t$($archiveRecords[$version].Digest)`t$($archiveRecords[$version].Archive)")
+    }
+    $commandIndex = Join-Path $commandRoot 'index.tsv'
+    $commandIndexText = "takween-index-v1`n" + (($commandIndexRows -join "`n") + "`n")
+    [IO.File]::WriteAllText($commandIndex, $commandIndexText, $utf8NoBom)
+
+    $commandProject = Join-Path $commandRoot 'project'
+    New-Item -ItemType Directory -Force (Join-Path $commandProject 'مصدر') | Out-Null
+    # Edits keep the manifest's own line ending; Windows exercises CRLF.
+    $commandNewline = "`n"
+    if ($env:OS -eq 'Windows_NT') { $commandNewline = "`r`n" }
+    $commandManifestLines = @(
+        '[المشروع]',
+        'الاسم = "تجارب/تطبيق_أوامر"',
+        'الإصدار = "1.0.0"',
+        'إصدار_باء = ">=0.6.0 <0.8.0"',
+        '',
+        '[الأهداف.تطبيق_أوامر]',
+        'النوع = "تنفيذي"',
+        'المدخل = "مصدر/الرئيسية.baa"',
+        '',
+        '[البناء]',
+        'المخرج = "build"',
+        'النمط = "تطوير"',
+        '',
+        '[الأنماط.تطوير]',
+        'التحسين = 1',
+        'التحقق = صواب'
+    )
+    $commandManifestPath = Join-Path $commandProject 'مشروع.تكوين'
+    [IO.File]::WriteAllText(
+        $commandManifestPath,
+        (($commandManifestLines -join $commandNewline) + $commandNewline),
+        $utf8NoBom)
+    $commandMain = @'
+#تضمين "واجهة_مساعد.baahd"
+
+صحيح الرئيسية() {
+    إذا (قيمة_مساعد() != ١١٠) { إرجع ١. }
+    اطبع "الحزمة ذات النطاق تعمل".
+    إرجع ٠.
+}
+'@
+    [IO.File]::WriteAllText((Join-Path $commandProject 'مصدر/الرئيسية.baa'), $commandMain, $utf8NoBom)
+    $commandLockPath = Join-Path $commandProject 'تكوين.قفل'
+
+    function Get-CommandManifestBytes {
+        return [Convert]::ToBase64String([IO.File]::ReadAllBytes($commandManifestPath))
+    }
+    function Get-CommandLockNode([string]$Alias) {
+        $lock = Get-Content -Raw -Encoding utf8 -LiteralPath $commandLockPath | ConvertFrom-Json
+        return @($lock.packages | Where-Object { $_.alias -eq $Alias })[0]
+    }
+
+    $oldPackageIndex = $env:TAKWEEN_PACKAGE_INDEX
+    $env:TAKWEEN_PACKAGE_INDEX = $commandIndex
+    Push-Location $commandProject
+    try {
+        $search = Invoke-ExpectedSuccess $takween @('ابحث', 'مساعد') 'package search'
+        $expectedSearch = @(
+            "$namespacedName`t2.0.0-beta.1",
+            "$namespacedName`t1.1.0",
+            "$namespacedName`t1.0.0"
+        ) -join "`n"
+        if ($search.Replace("`r`n", "`n").Trim() -cne $expectedSearch) {
+            throw "Package search did not list names ascending and versions descending.`n$search"
+        }
+        $searchAll = Invoke-ExpectedSuccess $takween @('search', 'أ') 'package search across names'
+        $expectedSearchAll = @(
+            "$namespacedName`t2.0.0-beta.1",
+            "$namespacedName`t1.1.0",
+            "$namespacedName`t1.0.0",
+            "مكتبة_أرشيف`t2.0.0",
+            "مكتبة_أرشيف`t1.2.0+build.1",
+            "مكتبة_أرشيف`t1.0.0"
+        ) -join "`n"
+        if ($searchAll.Replace("`r`n", "`n").Trim() -cne $expectedSearchAll) {
+            throw "Package search across names is not in deterministic order.`n$searchAll"
+        }
+
+        Invoke-ExpectedExitCode $takween @('ابحث') 2 'search without text' | Out-Null
+        $env:TAKWEEN_PACKAGE_INDEX = ''
+        $noIndex = Invoke-ExpectedFailure $takween @('ابحث', 'مساعد') 'search without an index'
+        $env:TAKWEEN_PACKAGE_INDEX = $commandIndex
+        if ($noIndex -notmatch 'TAKWEEN_PACKAGE_INDEX') {
+            throw "Search without an index did not name the variable.`n$noIndex"
+        }
+        Invoke-ExpectedExitCode $takween @('أضف') 2 'add without a package' | Out-Null
+        Invoke-ExpectedExitCode $takween @('أضف', 'محلي', '--مسار', '../محلي', '--إصدار', '^1.0.0') 2 `
+            'add mixing path and version' | Out-Null
+
+        Invoke-ExpectedSuccess $takween @('أضف', $namespacedName, '--إصدار', '=1.0.0') `
+            'add namespaced index package' | Out-Null
+        $manifestText = [IO.File]::ReadAllText($commandManifestPath)
+        if (-not $manifestText.Contains('[الاعتماديات.نص_مساعد]') -or
+            -not $manifestText.Contains('الحزمة = "أدوات/نص_مساعد"') -or
+            -not $manifestText.Contains('الإصدار = "=1.0.0"')) {
+            throw "Add did not write the namespaced dependency section.`n$manifestText"
+        }
+        $helperNode = Get-CommandLockNode 'نص_مساعد'
+        if (-not $helperNode -or $helperNode.name -ne $namespacedName -or $helperNode.version -ne '1.0.0') {
+            throw 'Add did not resolve the namespaced package into the lock.'
+        }
+
+        Invoke-ExpectedSuccess $takween @('حدّث', 'نص_مساعد') 'update to the highest stable version' | Out-Null
+        if (-not [IO.File]::ReadAllText($commandManifestPath).Contains('الإصدار = "^1.1.0"')) {
+            throw 'Update did not move the constraint to the highest stable index version.'
+        }
+        if ((Get-CommandLockNode 'نص_مساعد').version -ne '1.1.0') {
+            throw 'Update did not re-resolve the lock to the new constraint.'
+        }
+
+        $manifestBeforeFailure = Get-CommandManifestBytes
+        $lockBeforeFailure = (Get-FileHash -Algorithm SHA256 -LiteralPath $commandLockPath).Hash
+        $failedAdd = Invoke-ExpectedFailure $takween @('أضف', 'مكتبة_أرشيف') 'add rejected by resolution'
+        if ($failedAdd -notmatch 'أعيد مشروع.تكوين') {
+            throw "A failed add did not report the manifest restore.`n$failedAdd"
+        }
+        if ((Get-CommandManifestBytes) -cne $manifestBeforeFailure -or
+            (Get-FileHash -Algorithm SHA256 -LiteralPath $commandLockPath).Hash -ne $lockBeforeFailure) {
+            throw 'A failed add changed the manifest or lock bytes.'
+        }
+
+        Invoke-ExpectedSuccess $takween @('add', 'مكتبة_أرشيف', '--version', '~1.0.0', '--as', 'أرشيف_قديم') `
+            'add with an alias and a constraint' | Out-Null
+        $manifestText = [IO.File]::ReadAllText($commandManifestPath)
+        if (-not $manifestText.Contains("[الاعتماديات.أرشيف_قديم]$commandNewline" +
+                "الحزمة = `"مكتبة_أرشيف`"$commandNewline" +
+                "الإصدار = `"~1.0.0`"")) {
+            throw "Add with an alias did not write the package key.`n$manifestText"
+        }
+        $aliasNode = Get-CommandLockNode 'أرشيف_قديم'
+        if (-not $aliasNode -or $aliasNode.name -ne 'مكتبة_أرشيف' -or $aliasNode.version -ne '1.0.0') {
+            throw 'Add with an alias did not resolve the index package.'
+        }
+        if ($commandNewline -eq "`r`n") {
+            if ($manifestText -match "[^`r]`n") { throw 'Add mixed LF lines into a CRLF manifest.' }
+        } elseif ($manifestText.Contains("`r")) {
+            throw 'Add wrote CR into an LF manifest.'
+        }
+
+        $manifestBeforeDuplicate = Get-CommandManifestBytes
+        $duplicate = Invoke-ExpectedFailure $takween @('أضف', 'مكتبة_أرشيف', '--باسم', 'أرشيف_قديم') `
+            'duplicate dependency rejection'
+        if ($duplicate -notmatch 'موجودة' -or (Get-CommandManifestBytes) -cne $manifestBeforeDuplicate) {
+            throw 'A duplicate dependency was not rejected without changes.'
+        }
+
+        $failedUpdate = Invoke-ExpectedFailure $takween @('update', 'أرشيف_قديم') 'update rejected by resolution'
+        if ($failedUpdate -notmatch 'إصدار Baa' -or (Get-CommandManifestBytes) -cne $manifestBeforeDuplicate) {
+            throw "A failed update did not restore the manifest.`n$failedUpdate"
+        }
+        $unchanged = Invoke-ExpectedSuccess $takween @('حدّث') 'update the lock without edits'
+        if ($unchanged -notmatch 'لم يتغير') {
+            throw "Update without a name did not report an unchanged lock.`n$unchanged"
+        }
+
+        # A path dependency added and removed again leaves the manifest bytes as they were.
+        $localHelper = Join-Path $commandProject 'حزم/مساعد_محلي'
+        New-Item -ItemType Directory -Force (Join-Path $localHelper 'مصدر') | Out-Null
+        [IO.File]::WriteAllText((Join-Path $localHelper 'مشروع.تكوين'), @'
+[المشروع]
+الاسم = "مساعد_محلي"
+الإصدار = "1.0.0"
+إصدار_باء = ">=0.6.0 <0.8.0"
+
+[الأهداف.مساعد_محلي]
+النوع = "مكتبة"
+المدخل = "مصدر/محلي.baa"
+
+[البناء]
+المخرج = "build"
+النمط = "تطوير"
+
+[الأنماط.تطوير]
+التحسين = 1
+التحقق = خطأ
+'@, $utf8NoBom)
+        [IO.File]::WriteAllText((Join-Path $localHelper 'مصدر/محلي.baa'), "صحيح قيمة_محلية() { إرجع ١. }`n", $utf8NoBom)
+        $manifestBeforePath = Get-CommandManifestBytes
+        Invoke-ExpectedSuccess $takween @('أضف', 'مساعد_محلي', '--مسار', 'حزم/مساعد_محلي') `
+            'add a path dependency' | Out-Null
+        $manifestText = [IO.File]::ReadAllText($commandManifestPath)
+        if (-not $manifestText.Contains("[الاعتماديات.مساعد_محلي]$commandNewline" +
+                "المسار = `"حزم/مساعد_محلي`"") -or $manifestText.Contains('الحزمة = "مساعد_محلي"')) {
+            throw "Add with --مسار did not write a path dependency.`n$manifestText"
+        }
+        Invoke-ExpectedSuccess $takween @('remove', 'مساعد_محلي') 'remove the last section' | Out-Null
+        if ((Get-CommandManifestBytes) -cne $manifestBeforePath) {
+            throw "Add then remove did not restore the manifest bytes.`n$([IO.File]::ReadAllText($commandManifestPath))"
+        }
+
+        $commandRun = Invoke-ExpectedSuccess $takween @('run') 'run with a namespaced package'
+        if ($commandRun -notmatch 'الحزمة ذات النطاق تعمل') {
+            throw 'The namespaced package was not built and linked.'
+        }
+        Invoke-ExpectedSuccess $takween @('توريد') 'vendor a namespaced package' | Out-Null
+        $namespacedVendor = Join-Path $commandProject ('مورد/أدوات/نص_مساعد/1.1.0/' + $helperDigests['1.1.0'])
+        if (-not (Test-Path -LiteralPath (Join-Path $namespacedVendor 'تضمين/واجهة_مساعد.baahd'))) {
+            throw 'Vendoring did not nest the namespaced package under its namespace.'
+        }
+
+        Invoke-ExpectedSuccess $takween @('احذف', 'أرشيف_قديم') 'remove a dependency' | Out-Null
+        if ([IO.File]::ReadAllText($commandManifestPath).Contains('أرشيف_قديم') -or
+            (Get-CommandLockNode 'أرشيف_قديم')) {
+            throw 'Remove left the dependency in the manifest or lock.'
+        }
+        Invoke-ExpectedFailure $takween @('remove', 'أرشيف_قديم') 'remove a missing dependency' | Out-Null
+
+        Invoke-ExpectedSuccess $takween @('احذف', 'نص_مساعد') 'remove the namespaced dependency' | Out-Null
+        $normalizedAdd = Invoke-ExpectedSuccess $takween @('أضف', "$decomposedNamespace/نص_مساعد") `
+            'add normalizes a decomposed command-line name'
+        $manifestText = [IO.File]::ReadAllText($commandManifestPath)
+        if ($normalizedAdd -notmatch 'NFC' -or
+            -not $manifestText.Contains('الحزمة = "أدوات/نص_مساعد"') -or
+            $manifestText.Contains($decomposedNamespace)) {
+            throw "A decomposed command-line name was not normalized to NFC.`n$normalizedAdd"
+        }
+
+        $nfcManifest = $manifestText
+        [IO.File]::WriteAllText(
+            $commandManifestPath,
+            $nfcManifest.Replace('"أدوات/نص_مساعد"', "`"$decomposedNamespace/نص_مساعد`""),
+            $utf8NoBom)
+        $decomposedFailure = Invoke-ExpectedFailure $takween @('check') 'decomposed stored name rejection'
+        if ($decomposedFailure -notmatch 'اكتبه: أدوات/نص_مساعد') {
+            throw "A decomposed stored name was not rejected with its NFC spelling.`n$decomposedFailure"
+        }
+        [IO.File]::WriteAllText(
+            $commandManifestPath,
+            $nfcManifest.Replace('الإصدار = "^1.1.0"', 'المسار = "../غير_موجود"'),
+            $utf8NoBom)
+        $packageKeyFailure = Invoke-ExpectedFailure $takween @('check') 'package key without a version'
+        if ($packageKeyFailure -notmatch "'الحزمة'") {
+            throw "A package key without a version constraint was accepted.`n$packageKeyFailure"
+        }
+        [IO.File]::WriteAllText($commandManifestPath, $nfcManifest, $utf8NoBom)
+
+        [IO.File]::WriteAllText(
+            $commandIndex,
+            $commandIndexText.Replace($namespacedName, "$decomposedNamespace/نص_مساعد"),
+            $utf8NoBom)
+        $indexFailure = Invoke-ExpectedFailure $takween @('ابحث', 'مساعد') 'decomposed index name rejection'
+        if ($indexFailure -notmatch 'NFC') {
+            throw "A decomposed index name was not rejected.`n$indexFailure"
+        }
+        [IO.File]::WriteAllText($commandIndex, $commandIndexText, $utf8NoBom)
+        Invoke-ExpectedSuccess $takween @('check') 'package commands leave a valid project' | Out-Null
+    } finally {
+        Pop-Location
+        $env:TAKWEEN_PACKAGE_INDEX = $oldPackageIndex
+    }
+
     $gitProgram = (Get-Command git -ErrorAction Stop).Source
     $gitPackageRoot = Join-Path $tempRoot 'git-package-source'
     New-Item -ItemType Directory -Force $gitPackageRoot | Out-Null
