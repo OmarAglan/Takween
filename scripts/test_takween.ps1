@@ -1915,7 +1915,8 @@ commit = "$gitCommit"
         if (-not $lockedOutput.Contains('.قفل') -or -not (Test-Path -LiteralPath $sdk07)) {
             throw 'A held store lock did not stop SDK removal.'
         }
-        Remove-Item -LiteralPath $lockPath
+        # A dot file is hidden on Linux, and Remove-Item skips hidden items without -Force.
+        Remove-Item -Force -LiteralPath $lockPath
 
         Invoke-ExpectedSuccess $takween @('sdk', 'remove', '0.7.0') 'SDK remove' | Out-Null
         Invoke-ExpectedExitCode $takween @('طقم', 'احذف', '0.7.0') 1 'SDK remove twice' | Out-Null
