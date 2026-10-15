@@ -1824,7 +1824,7 @@ commit = "$gitCommit"
     [Console]::OutputEncoding = $utf8NoBom
     Push-Location $tempRoot
     try {
-        & $python -I (Join-Path $PSScriptRoot 'make_sdk_fixture.py') `
+        & $python -I -X utf8 (Join-Path $PSScriptRoot 'make_sdk_fixture.py') `
             --host $targetInfo.host_target --output-dir $fixtureRoot
         if ($LASTEXITCODE -ne 0) { throw 'SDK fixture generation failed.' }
         $fixture = { param([string]$Name) Join-Path $fixtureRoot $Name }
@@ -2023,7 +2023,7 @@ commit = "$gitCommit"
         # A real SDK from Baa's packager installs, reports its own root, and builds a program.
         $baaRoot = Split-Path -Parent $baaStdlib
         $realSdkOut = Join-Path $tempRoot 'طقم حقيقي'
-        $packageArgs = @('-I', (Join-Path $baaRoot 'scripts/package_sdk.py'), '--baa', $resolvedBaa,
+        $packageArgs = @('-I', '-X', 'utf8', (Join-Path $baaRoot 'scripts/package_sdk.py'), '--baa', $resolvedBaa,
             '--output-dir', $realSdkOut)
         if ($targetInfo.host_target -eq 'x86_64-windows') { $packageArgs += '--no-bundled-linker' }
         & $python @packageArgs
