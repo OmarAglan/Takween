@@ -118,6 +118,7 @@ if (-not (Test-Path -LiteralPath $arabicNazm)) {
     throw "The selected Nazm build does not provide the primary Arabic launcher: $arabicNazm"
 }
 $oldPath = $env:PATH
+$oldDataHomeOuter = $env:TAKWEEN_DATA_HOME
 $baaStdlib = $null
 $probe = Get-Item -LiteralPath $baaDirectory
 while ($probe -and -not $baaStdlib) {
@@ -134,6 +135,8 @@ if (-not $baaStdlib) {
 
 try {
     $env:PATH = "$baaDirectory$([IO.Path]::PathSeparator)$nazmDirectory$([IO.Path]::PathSeparator)$oldPath"
+    # Builds prefer installed Baa SDKs; an empty store keeps them on the compiler under test.
+    $env:TAKWEEN_DATA_HOME = Join-Path $tempRoot 'بيانات فارغة'
     Write-Output "Testing with Baa: $resolvedBaa"
     Write-Output "Testing with Nazm: $arabicNazm"
     & $resolvedBaa --version
@@ -1931,6 +1934,91 @@ commit = "$gitCommit"
         Invoke-ExpectedExitCode $takween @('طقم', 'مسار') 2 'SDK path without a version' | Out-Null
         Invoke-ExpectedExitCode $takween @('طقم', 'احذف', 'latest') 2 'SDK remove with a non-version' | Out-Null
 
+        # SDK selection: the lock's pin, else the highest installed SDK that satisfies إصدار_باء.
+        $selectRoot = Join-Path $tempRoot 'اختيار طقم'
+        New-Item -ItemType Directory -Force $selectRoot | Out-Null
+        $selectManifestPath = Join-Path $selectRoot 'مشروع.تكوين'
+        $selectLockPath = Join-Path $selectRoot 'تكوين.قفل'
+        $writeSelectManifest = {
+            param([string]$Constraint)
+            [IO.File]::WriteAllText($selectManifestPath, @"
+[المشروع]
+الاسم = "اختيار"
+الإصدار = "1.0.0"
+إصدار_باء = "$Constraint"
+
+[الأهداف.اختيار]
+النوع = "تنفيذي"
+المدخل = "مصدر/رئيسي.baa"
+
+[البناء]
+المخرج = "build"
+النمط = "تطوير"
+
+[الأنماط.تطوير]
+التحسين = 1
+التحقق = خطأ
+"@, $utf8NoBom)
+        }
+        $writeLockPin = {
+            param([string]$Version, [string]$Hash, [string]$HostName)
+            $pin = "{`"version`":`"$Version`",`"host`":`"$HostName`",`"archive_sha256`":`"$Hash`"}"
+            [IO.File]::WriteAllText($selectLockPath, ("{`n  `"schema_version`": `"takween-lock-v1`",`n" +
+                "  `"baa`": {`"constraint`":`">=0.6.0`",`"target`":`"$HostName`",`"capabilities`":[`"تجميع`"],`"sdk`":$pin},`n" +
+                "  `"packages`": [`n  ]`n}`n"), $utf8NoBom)
+        }
+        $selectedSdk = {
+            param([string]$Label)
+            ((Invoke-ExpectedSuccess $takween @('طقم', 'مختار') $Label).Trim() -split "`t")[0]
+        }
+        $hash06 = (Get-Content -Raw -LiteralPath (& $fixture 'valid-0.6.0.tar.gz.sha256')).Substring(0, 64)
+        Push-Location $selectRoot
+        try {
+            & $writeSelectManifest '>=0.6.0 <0.7.0'
+            $which = (Invoke-ExpectedSuccess $takween @('sdk', 'which') 'SDK selection by constraint').Trim()
+            if ($which -ne "0.6.0`t$($targetInfo.host_target)`t$($sdk06.Replace('\', '/'))") {
+                throw "SDK selection printed '$which'."
+            }
+            & $writeSelectManifest '>=0.6.0'
+            if ((& $selectedSdk 'highest SDK selection') -ne '0.8.0') {
+                throw 'The highest installed SDK that satisfies إصدار_باء was not selected.'
+            }
+            & $writeSelectManifest '>=0.9.0'
+            $none = Invoke-ExpectedSuccess $takween @('طقم', 'مختار') 'no matching SDK'
+            if (-not $none.Contains('PATH')) { throw "No matching SDK printed: $none" }
+
+            & $writeSelectManifest '>=0.6.0'
+            & $writeLockPin '0.6.0' $hash06 $targetInfo.host_target
+            if ((& $selectedSdk 'locked SDK selection') -ne '0.6.0') {
+                throw "The lock's SDK pin did not win over a higher installed SDK."
+            }
+            & $writeLockPin '0.6.0' ('0' * 64) $targetInfo.host_target
+            Invoke-ExpectedExitCode $takween @('طقم', 'مختار') 1 'locked SDK from another archive' | Out-Null
+            & $writeLockPin '0.7.0' $hash06 $targetInfo.host_target
+            $missing = Invoke-ExpectedExitCode $takween @('طقم', 'مختار') 1 'locked SDK not installed'
+            if (-not $missing.Contains('طقم ثبت')) { throw "A missing locked SDK printed: $missing" }
+            & $writeLockPin '0.6.0' 'abc' $targetInfo.host_target
+            Invoke-ExpectedExitCode $takween @('طقم', 'مختار') 1 'malformed locked SDK' | Out-Null
+            & $writeLockPin '0.6.0' $hash06 'x86_64-other'
+            if ((& $selectedSdk 'SDK pin for another host') -ne '0.8.0') {
+                throw 'An SDK pin for another host was not re-selected.'
+            }
+            & $writeLockPin '0.6.0' $hash06 $targetInfo.host_target
+            & $writeSelectManifest '>=0.8.0'
+            if ((& $selectedSdk 'SDK pin outside the constraint') -ne '0.8.0') {
+                throw 'An SDK pin outside إصدار_باء was not re-selected.'
+            }
+            Remove-Item -LiteralPath $selectLockPath
+
+            $env:TAKWEEN_DATA_HOME = 'بيانات نسبية'
+            Invoke-ExpectedExitCode $takween @('طقم', 'مختار') 2 'relative SDK store' | Out-Null
+            $env:TAKWEEN_DATA_HOME = $dataHome
+            Invoke-ExpectedExitCode $takween @('طقم', 'مختار', 'زائد') 2 'SDK which with an argument' | Out-Null
+        } finally {
+            Pop-Location
+            $env:TAKWEEN_DATA_HOME = $dataHome
+        }
+
         # A real SDK from Baa's packager installs, reports its own root, and builds a program.
         $baaRoot = Split-Path -Parent $baaStdlib
         $realSdkOut = Join-Path $tempRoot 'طقم حقيقي'
@@ -1962,6 +2050,144 @@ commit = "$gitCommit"
         if (-not $helloOutput.Contains('طقم يعمل')) {
             throw "The program built by the installed SDK printed: $helloOutput"
         }
+
+        # Two differently locked projects build with the SDK their locks pin, never with
+        # whatever baa is first on PATH.
+        $realHash = (Get-Content -Raw -LiteralPath ($realArchive.FullName + '.sha256')).Substring(0, 64)
+        $realCompiler = $realBaa.Replace('\', '/')
+        $decoyBin = Join-Path $tempRoot 'baa مزيف'
+        New-Item -ItemType Directory -Force $decoyBin | Out-Null
+        $decoySource = Join-Path $tempRoot 'مزيف.baa'
+        [IO.File]::WriteAllText($decoySource,
+            "#تضمين `"baalib.baahd`"`nصحيح الرئيسية() {`n    اطبع `"baa مزيف`".`n    إرجع ٣.`n}`n",
+            $utf8NoBom)
+        Invoke-ExpectedSuccess $realBaa @($decoySource, '-o', (Join-Path $decoyBin ('baa' + $hostSuffix))) `
+            'decoy baa build' | Out-Null
+        $sdkPin = "`"sdk`":{`"version`":`"$realVersion`",`"host`":`"$($targetInfo.host_target)`",`"archive_sha256`":`"$realHash`"}"
+        $sdkProjectManifest = {
+            param([string]$Name, [string]$Kind, [string]$Entry, [string]$Extra)
+            @"
+[المشروع]
+الاسم = "$Name"
+الإصدار = "1.0.0"
+إصدار_باء = ">=$realVersion"
+
+[الأهداف.$Name]
+النوع = "$Kind"
+المدخل = "$Entry"
+
+[البناء]
+المخرج = "build"
+النمط = "تطوير"
+
+[الأنماط.تطوير]
+التحسين = 1
+التحقق = خطأ
+$Extra
+"@
+        }
+        $sdkProjects = @(
+            @{ Name = 'أول'; Root = (Join-Path $tempRoot 'مشروع طقم أول') },
+            @{ Name = 'ثان'; Root = (Join-Path $tempRoot 'مشروع طقم ثان') }
+        )
+        $savedPath = $env:PATH
+        $env:PATH = "$decoyBin$([IO.Path]::PathSeparator)$savedPath"
+        try {
+            foreach ($project in $sdkProjects) {
+                New-Item -ItemType Directory -Force (Join-Path $project.Root 'مصدر') | Out-Null
+                $extra = ''
+                $body = "    اطبع `"مشروع $($project.Name)`".`n"
+                $declarations = ''
+                if ($project.Name -eq 'ثان') {
+                    $library = Join-Path $project.Root 'حزم/مكتبة'
+                    New-Item -ItemType Directory -Force (Join-Path $library 'مصدر') | Out-Null
+                    [IO.File]::WriteAllText((Join-Path $library 'مشروع.تكوين'),
+                        (& $sdkProjectManifest 'مكتبة' 'مكتبة' 'مصدر/مكتبة.baa' ''), $utf8NoBom)
+                    [IO.File]::WriteAllText((Join-Path $library 'مصدر/مكتبة.baa'),
+                        "صحيح قيمة_المكتبة() { إرجع ٧. }`n", $utf8NoBom)
+                    $extra = "`n[الاعتماديات.مكتبة]`nالمسار = `"حزم/مكتبة`"`n"
+                    $declarations = "صحيح قيمة_المكتبة().`n"
+                    $body = "    اطبع `"مشروع ثان`".`n    اطبع قيمة_المكتبة().`n"
+                }
+                [IO.File]::WriteAllText((Join-Path $project.Root 'مشروع.تكوين'),
+                    (& $sdkProjectManifest $project.Name 'تنفيذي' 'مصدر/رئيسي.baa' $extra), $utf8NoBom)
+                [IO.File]::WriteAllText((Join-Path $project.Root 'مصدر/رئيسي.baa'),
+                    "#تضمين `"baalib.baahd`"`n$declarations" + "صحيح الرئيسية() {`n$body    إرجع ٠.`n}`n",
+                    $utf8NoBom)
+
+                Push-Location $project.Root
+                try {
+                    $runOutput = Invoke-ExpectedSuccess $takween @('تشغيل') "SDK project $($project.Name) run"
+                    if (-not $runOutput.Contains("مشروع $($project.Name)") -or $runOutput.Contains('baa مزيف')) {
+                        throw "SDK project $($project.Name) ran: $runOutput"
+                    }
+                    $lockText = [IO.File]::ReadAllText((Join-Path $project.Root 'تكوين.قفل'))
+                    if (-not $lockText.Contains($sdkPin)) {
+                        throw "The lock of $($project.Name) does not pin the SDK.`n$lockText"
+                    }
+                    $plan = Invoke-ExpectedSuccess $takween @('خطة', '--جسون') "SDK project $($project.Name) plan" |
+                        ConvertFrom-Json
+                    if ($plan.argv[0] -ne $realCompiler -or $plan.sdk.version -ne $realVersion -or
+                        $plan.sdk.archive_sha256 -ne $realHash -or $plan.sdk.root -ne $realRoot) {
+                        throw "The plan of $($project.Name) does not run the pinned SDK: $($plan.argv[0])"
+                    }
+                    $project.Lock = $lockText
+                    $project.Plan = Invoke-ExpectedSuccess $takween @('خطة', '--جسون', '--مقفل') `
+                        "SDK project $($project.Name) locked plan"
+                    Invoke-ExpectedSuccess $takween @('تنظيف') "SDK project $($project.Name) clean" | Out-Null
+                    Invoke-ExpectedSuccess $takween @('بناء', '--مقفل') "SDK project $($project.Name) locked rebuild" |
+                        Out-Null
+                    $replan = Invoke-ExpectedSuccess $takween @('خطة', '--جسون', '--مقفل') `
+                        "SDK project $($project.Name) locked replan"
+                    if ($replan -ne $project.Plan -or
+                        [IO.File]::ReadAllText((Join-Path $project.Root 'تكوين.قفل')) -ne $project.Lock) {
+                        throw "The locked rebuild of $($project.Name) changed its plan or lock."
+                    }
+                } finally {
+                    Pop-Location
+                }
+            }
+            if ($sdkProjects[0].Lock -eq $sdkProjects[1].Lock) {
+                throw 'The two SDK projects were not locked differently.'
+            }
+
+            Push-Location $sdkProjects[0].Root
+            try {
+                # A pinned SDK that is gone is an error, never a silent fall back to PATH.
+                Invoke-ExpectedSuccess $takween @('طقم', 'احذف', $realVersion) 'remove the pinned SDK' | Out-Null
+                $gone = Invoke-ExpectedExitCode $takween @('بناء') 1 'build with the pinned SDK removed'
+                if (-not $gone.Contains('طقم ثبت') -or $gone.Contains('baa مزيف')) {
+                    throw "A build without its pinned SDK printed: $gone"
+                }
+                Invoke-ExpectedSuccess $takween @('طقم', 'ثبت', $realArchive.FullName) 'reinstall the pinned SDK' |
+                    Out-Null
+                Invoke-ExpectedSuccess $takween @('بناء', '--مقفل') 'locked build after reinstall' | Out-Null
+
+                # حدّث re-selects the SDK; a pin from another archive is an error until then.
+                $lockFile = Join-Path $sdkProjects[0].Root 'تكوين.قفل'
+                [IO.File]::WriteAllText($lockFile, $sdkProjects[0].Lock.Replace($realHash, ('0' * 64)), $utf8NoBom)
+                Invoke-ExpectedExitCode $takween @('بناء') 1 'build with an SDK pin from another archive' | Out-Null
+                Invoke-ExpectedSuccess $takween @('حدّث') 'update re-pins the SDK' | Out-Null
+                if ([IO.File]::ReadAllText($lockFile) -ne $sdkProjects[0].Lock) {
+                    throw 'Update did not re-pin the installed SDK.'
+                }
+
+                # A lock without an SDK keeps --مقفل on the PATH compiler it was built with.
+                [IO.File]::WriteAllText($lockFile, $sdkProjects[0].Lock.Replace(",$sdkPin", ''), $utf8NoBom)
+                $pathBuild = Invoke-ExpectedFailure $takween @('بناء', '--مقفل') 'locked build without an SDK pin'
+                if (-not $pathBuild.Contains('فشل اكتشاف هدف Baa')) {
+                    throw "A locked build without an SDK pin did not run baa from PATH: $pathBuild"
+                }
+                Invoke-ExpectedSuccess $takween @('بناء') 'unlocked build pins the SDK again' | Out-Null
+                if ([IO.File]::ReadAllText($lockFile) -ne $sdkProjects[0].Lock) {
+                    throw 'An unlocked build did not pin the installed SDK.'
+                }
+            } finally {
+                Pop-Location
+            }
+        } finally {
+            $env:PATH = $savedPath
+        }
     } finally {
         Pop-Location
         $env:TAKWEEN_DATA_HOME = $oldDataHome
@@ -1972,6 +2198,7 @@ commit = "$gitCommit"
     $global:LASTEXITCODE = 0
 } finally {
     $env:PATH = $oldPath
+    $env:TAKWEEN_DATA_HOME = $oldDataHomeOuter
     if (Test-Path -LiteralPath $tempRoot) {
         Remove-Item -Recurse -Force -LiteralPath $tempRoot
     }
