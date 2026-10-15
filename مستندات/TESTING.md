@@ -18,6 +18,7 @@
 12. Typed Extensible Profiles
 13. Deterministic Content-Addressed Cache
 14. Multi-Package Workspace Selection
+15. Baa SDK Store (gzip/ustar Extraction + Atomic Install + Coexistence)
 
 ## حالات أساسية
 
@@ -131,6 +132,22 @@
 - تنبيه المستخدم إذا `baa.exe` غير موجود في PATH.
 - إزالة PATH entry عند uninstall.
 
+### مخزن طقوم باء
+- يكتب `scripts/make_sdk_fixture.py` أرشيفات `baa-sdk-v1` مزيفة: ثلاثة صالحة
+  بكتل deflate ديناميكية وثابتة ومخزنة، وأرشيفا آخر لهوية `0.6.0`، وأكثر من 40
+  أرشيفا يكسر كل منها قاعدة واحدة (مسارات `..` وأجهزة Windows ومحارف محجوزة،
+  مدخل زائد أو ناقص، رابط أو مجلد أو pax، وضع خاطئ أو setuid، مجموع تحقق، حشو
+  غير صفري، بيانات بعد النهاية، بيانات وصفية ليست الأولى أو غير قياسية أو ليست
+  UTF-8، مضيف أو قمة أو إصدار خاطئ، تجزئة أو حجم أو علم تنفيذ لا يطابق، جرد غير
+  مرتب، gzip مبتور أو بـCRC أو ISIZE خاطئ أو بذيل أو بعضوين أو بعلم FNAME).
+- ثلاثة إصدارات تتجاور وتظهر في `takween-sdk-list-v1` مرتبة ومع تجزئة أرشيفها؛
+  `تحقق` ينجح لكل منها ويفشل بعد تعديل ملف.
+- كل أرشيف مرفوض كود `1` ويترك المخزن بلا مجلد ولا `.مؤقت` ولا قفل.
+- إعادة تثبيت الأرشيف نفسه نجاح؛ أرشيف آخر للهوية نفسها كود `1`.
+- قفل محجوز يمنع الحذف؛ حذف طقم لا يمس الآخرين.
+- طقم حقيقي من `package_sdk.py` بمستودع باء يثبت، ويبلغ مصرّفه `sdk_root` مساويا
+  لمساره في المخزن، ويبني برنامجا يعمل.
+
 ## runner الآلي
 
 يشغل `scripts/test_takween.ps1` بناء تكوين بمصرّف Baa محدد، ثم يتحقق من
@@ -150,6 +167,9 @@ help/version وinit/check/build/rebuild/run/clean/plan، وعقود JSON وال�
   -BaaPath ..\Baa\build\presets\windows-verify\baa.exe `
   -NazmPath ..\Nazm\build\eco-verify\nazm.exe
 ```
+
+اختبارات مخزن الطقوم تحتاج Python 3 (`python` على Windows و`python3` غيره، أو
+`-PythonPath`) ومستودع باء بجوار المصرّف ليجد `scripts/package_sdk.py`.
 
 لا يعد الاختبار ناجحا إذا استخدم Baa مختلفا بصمت؛ يطبع runner المسار والإصدار.
 

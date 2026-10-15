@@ -185,6 +185,7 @@ commit = "0123456789abcdef0123456789abcdef01234567"
 - [عقد خطة البناء v1](مستندات/BUILD_PLAN_V1.md)
 - [عقد مساحة العمل v1](مستندات/WORKSPACE_V1.md)
 - [دليل المثبت](مستندات/INSTALLER.md)
+- [مخزن طقوم باء v1](مستندات/SDK_STORE_V1.md)
 
 ## الارتباط بمشروع Baa
 - المستودع الأساسي: <https://github.com/OmarAglan/Baa>

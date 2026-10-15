@@ -4,7 +4,10 @@ param(
     [string]$BaaPath,
 
     [Parameter(Mandatory = $true)]
-    [string]$NazmPath
+    [string]$NazmPath,
+
+    # Writes the SDK fixtures and packages a real SDK (default: python, or python3 off Windows).
+    [string]$PythonPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -1801,6 +1804,168 @@ commit = "$gitCommit"
         }
     } finally {
         Pop-Location
+    }
+
+    # Baa SDK store: install, coexistence, verification, removal, and rejection of
+    # every malformed archive without leaving anything in the store.
+    if (-not $PythonPath) {
+        $PythonPath = if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'python' } else { 'python3' }
+    }
+    $python = (Get-Command $PythonPath -ErrorAction Stop).Source
+    $oldDataHome = $env:TAKWEEN_DATA_HOME
+    $dataHome = Join-Path $tempRoot 'بيانات تكوين'
+    $sdkStore = Join-Path $dataHome 'طقوم'
+    $fixtureRoot = Join-Path $tempRoot 'أرشيفات الطقوم'
+    $env:TAKWEEN_DATA_HOME = $dataHome
+    $oldOutputEncoding = [Console]::OutputEncoding
+    [Console]::OutputEncoding = $utf8NoBom
+    Push-Location $tempRoot
+    try {
+        & $python -I (Join-Path $PSScriptRoot 'make_sdk_fixture.py') `
+            --host $targetInfo.host_target --output-dir $fixtureRoot
+        if ($LASTEXITCODE -ne 0) { throw 'SDK fixture generation failed.' }
+        $fixture = { param([string]$Name) Join-Path $fixtureRoot $Name }
+        $sdkTop = { param([string]$Version) "baa-sdk-$Version-$($targetInfo.host_target)" }
+
+        $emptyList = Invoke-ExpectedSuccess $takween @('طقم', 'قائمة', '--جسون') 'empty SDK list' |
+            ConvertFrom-Json
+        if ($emptyList.schema_version -ne 'takween-sdk-list-v1' -or @($emptyList.sdks).Count -ne 0) {
+            throw 'An empty SDK store did not list as takween-sdk-list-v1 with no SDKs.'
+        }
+
+        Invoke-ExpectedSuccess $takween @('طقم', 'ثبت', (& $fixture 'valid-0.7.0.tar.gz')) `
+            'SDK install (fixed Huffman, sidecar hash)' | Out-Null
+        Invoke-ExpectedSuccess $takween @('sdk', 'install', (& $fixture 'valid-0.6.0.tar.gz')) `
+            'SDK install (dynamic Huffman)' | Out-Null
+        $storedHash = (Get-Content -Raw -LiteralPath (& $fixture 'valid-0.8.0.tar.gz.sha256')).Substring(0, 64)
+        $unsidecared = Join-Path $tempRoot 'طقم بلا تجزئة.tar.gz'
+        Copy-Item -LiteralPath (& $fixture 'valid-0.8.0.tar.gz') -Destination $unsidecared
+        Invoke-ExpectedExitCode $takween @('طقم', 'ثبت', $unsidecared) 1 `
+            'SDK install without an expected hash' | Out-Null
+        Invoke-ExpectedExitCode $takween @('طقم', 'ثبت', $unsidecared, '--تجزئة', ('0' * 64)) 1 `
+            'SDK install with a mismatched hash' | Out-Null
+        Invoke-ExpectedExitCode $takween @('طقم', 'ثبت', $unsidecared, '--تجزئة', 'abc') 2 `
+            'SDK install with a malformed hash' | Out-Null
+        Invoke-ExpectedSuccess $takween @('طقم', 'ثبّت', $unsidecared, '--تجزئة', $storedHash) `
+            'SDK install (stored blocks, explicit hash)' | Out-Null
+
+        $listed = Invoke-ExpectedSuccess $takween @('sdk', 'list', '--json') 'SDK list' | ConvertFrom-Json
+        $listedVersions = @($listed.sdks | ForEach-Object { $_.version }) -join ','
+        if ($listedVersions -ne '0.6.0,0.7.0,0.8.0') {
+            throw "Coexisting SDKs listed as '$listedVersions'."
+        }
+        foreach ($entry in $listed.sdks) {
+            $expectedPath = (Join-Path $sdkStore (& $sdkTop $entry.version)).Replace('\', '/')
+            if ($entry.path -ne $expectedPath -or $entry.host -ne $targetInfo.host_target) {
+                throw "SDK list entry for $($entry.version) has the wrong path or host."
+            }
+            $sidecar = & $fixture "valid-$($entry.version).tar.gz.sha256"
+            if ($entry.archive_sha256 -ne (Get-Content -Raw -LiteralPath $sidecar).Substring(0, 64)) {
+                throw "SDK list entry for $($entry.version) does not record its archive hash."
+            }
+            Invoke-ExpectedSuccess $takween @('طقم', 'تحقق', $entry.version) "SDK verify $($entry.version)" |
+                Out-Null
+        }
+        $sdk06 = Join-Path $sdkStore (& $sdkTop '0.6.0')
+        $bigFile = Join-Path $sdk06 'share/baa/big.bin'
+        if ((Get-Item -LiteralPath $bigFile).Length -lt 300000 -or
+            -not (Test-Path -LiteralPath (Join-Path $sdk06 'share/baa/مكتبة/نص عربي.txt')) -or
+            (Get-Item -LiteralPath (Join-Path $sdk06 'share/baa/empty.txt')).Length -ne 0) {
+            throw 'The installed SDK is missing extracted files.'
+        }
+        $pathOutput = (Invoke-ExpectedSuccess $takween @('طقم', 'مسار', '0.6.0') 'SDK path').Trim()
+        if ($pathOutput -ne $sdk06.Replace('\', '/')) {
+            throw "SDK path printed '$pathOutput'."
+        }
+
+        Invoke-ExpectedSuccess $takween @('طقم', 'ثبت', (& $fixture 'valid-0.6.0.tar.gz')) `
+            'idempotent SDK reinstall' | Out-Null
+        Invoke-ExpectedExitCode $takween @('طقم', 'ثبت', (& $fixture 'repacked-0.6.0.tar.gz')) 1 `
+            'SDK reinstall from a different archive' | Out-Null
+
+        $badArchives = @(Get-ChildItem -LiteralPath $fixtureRoot -File -Filter 'bad-*.tar.gz')
+        if ($badArchives.Count -lt 40) {
+            throw "Only $($badArchives.Count) malformed SDK archives were generated."
+        }
+        foreach ($archive in $badArchives) {
+            Invoke-ExpectedExitCode $takween @('طقم', 'ثبت', $archive.FullName) 1 `
+                "malformed SDK archive $($archive.Name)" | Out-Null
+        }
+        $storeEntries = @(Get-ChildItem -Force -LiteralPath $sdkStore | ForEach-Object { $_.Name } |
+            Sort-Object) -join ','
+        $expectedEntries = @((& $sdkTop '0.6.0'), (& $sdkTop '0.7.0'), (& $sdkTop '0.8.0'), 'طقوم.فهرس' |
+            Sort-Object) -join ','
+        if ($storeEntries -ne $expectedEntries) {
+            throw "Rejected SDK archives left the store as: $storeEntries"
+        }
+
+        $sdk07 = Join-Path $sdkStore (& $sdkTop '0.7.0')
+        $tampered = Join-Path $sdk07 'share/baa/stdlib/baalib.baahd'
+        $original = [IO.File]::ReadAllBytes($tampered)
+        [IO.File]::WriteAllText($tampered, '// changed', $utf8NoBom)
+        Invoke-ExpectedExitCode $takween @('طقم', 'تحقق', '0.7.0') 1 'tampered SDK verify' | Out-Null
+        [IO.File]::WriteAllBytes($tampered, $original)
+
+        $lockPath = Join-Path $sdkStore '.قفل'
+        [IO.File]::WriteAllText($lockPath, 'held', $utf8NoBom)
+        $lockedOutput = Invoke-ExpectedExitCode $takween @('طقم', 'احذف', '0.7.0') 1 'SDK remove under a held lock'
+        if (-not $lockedOutput.Contains('.قفل') -or -not (Test-Path -LiteralPath $sdk07)) {
+            throw 'A held store lock did not stop SDK removal.'
+        }
+        Remove-Item -LiteralPath $lockPath
+
+        Invoke-ExpectedSuccess $takween @('sdk', 'remove', '0.7.0') 'SDK remove' | Out-Null
+        Invoke-ExpectedExitCode $takween @('طقم', 'احذف', '0.7.0') 1 'SDK remove twice' | Out-Null
+        Invoke-ExpectedExitCode $takween @('طقم', 'مسار', '0.7.0') 1 'removed SDK path' | Out-Null
+        if (Test-Path -LiteralPath $sdk07) { throw 'SDK removal left its directory.' }
+        $afterRemove = Invoke-ExpectedSuccess $takween @('طقم', 'قائمة', '--جسون') 'SDK list after remove' |
+            ConvertFrom-Json
+        if ((@($afterRemove.sdks | ForEach-Object { $_.version }) -join ',') -ne '0.6.0,0.8.0') {
+            throw 'Removing one SDK changed the others.'
+        }
+        Invoke-ExpectedSuccess $takween @('طقم', 'تحقق', '0.6.0') 'SDK verify after removing another' |
+            Out-Null
+
+        Invoke-ExpectedExitCode $takween @('طقم') 2 'SDK command without a subcommand' | Out-Null
+        Invoke-ExpectedExitCode $takween @('طقم', 'اطبخ') 2 'unknown SDK subcommand' | Out-Null
+        Invoke-ExpectedExitCode $takween @('طقم', 'مسار') 2 'SDK path without a version' | Out-Null
+        Invoke-ExpectedExitCode $takween @('طقم', 'احذف', 'latest') 2 'SDK remove with a non-version' | Out-Null
+
+        # A real SDK from Baa's packager installs, reports its own root, and builds a program.
+        $baaRoot = Split-Path -Parent $baaStdlib
+        $realSdkOut = Join-Path $tempRoot 'طقم حقيقي'
+        $packageArgs = @('-I', (Join-Path $baaRoot 'scripts/package_sdk.py'), '--baa', $resolvedBaa,
+            '--output-dir', $realSdkOut)
+        if ($targetInfo.host_target -eq 'x86_64-windows') { $packageArgs += '--no-bundled-linker' }
+        & $python @packageArgs
+        if ($LASTEXITCODE -ne 0) { throw 'Baa SDK packaging failed.' }
+        $realArchive = @(Get-ChildItem -LiteralPath $realSdkOut -File -Filter 'baa-sdk-*.tar.gz')[0]
+        # Its version may equal a fixture's, so it gets a store of its own.
+        $env:TAKWEEN_DATA_HOME = Join-Path $tempRoot 'مخزن حقيقي'
+        Invoke-ExpectedSuccess $takween @('طقم', 'ثبت', $realArchive.FullName) 'real SDK install' | Out-Null
+        $realVersion = ($realArchive.Name -replace '^baa-sdk-', '') -replace "-$($targetInfo.host_target)\.tar\.gz$", ''
+        Invoke-ExpectedSuccess $takween @('طقم', 'تحقق', $realVersion) 'real SDK verify' | Out-Null
+        $realRoot = (Invoke-ExpectedSuccess $takween @('طقم', 'مسار', $realVersion) 'real SDK path').Trim()
+        $realBaa = Join-Path $realRoot ('bin/baa' + $hostSuffix)
+        $sdkInfo = & $realBaa --sdk-info=json | Out-String | ConvertFrom-Json
+        if ($LASTEXITCODE -ne 0 -or $sdkInfo.sdk_root -ne $realRoot) {
+            throw "The installed SDK compiler reported sdk_root '$($sdkInfo.sdk_root)'."
+        }
+        $helloSource = Join-Path $tempRoot 'مرحبا_طقم.baa'
+        $helloExe = Join-Path $tempRoot ('مرحبا_طقم' + $hostSuffix)
+        [IO.File]::WriteAllText($helloSource,
+            "#تضمين `"baalib.baahd`"`nصحيح الرئيسية() {`n    اطبع `"طقم يعمل`".`n    إرجع ٠.`n}`n",
+            $utf8NoBom)
+        Invoke-ExpectedSuccess $realBaa @($helloSource, '-o', $helloExe) 'build with the installed SDK' |
+            Out-Null
+        $helloOutput = Invoke-ExpectedSuccess $helloExe @() 'program built by the installed SDK'
+        if (-not $helloOutput.Contains('طقم يعمل')) {
+            throw "The program built by the installed SDK printed: $helloOutput"
+        }
+    } finally {
+        Pop-Location
+        $env:TAKWEEN_DATA_HOME = $oldDataHome
+        [Console]::OutputEncoding = $oldOutputEncoding
     }
 
     Write-Output 'Takween smoke tests passed.'
