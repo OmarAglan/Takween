@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write baa-sdk-v1 test archives for Takween's SDK store tests.
+"""Write baa-sdk-v1 and baa-tool-v1 test archives for Takween's store tests.
 
 The archives hold fake SDK files, never a working compiler. Each valid archive
 follows docs/BAA_SDK_V1.md in the Baa repository byte for byte; each invalid
@@ -7,7 +7,12 @@ one breaks exactly one rule that `تكوين طقم ثبت` must enforce. Every 
 gets a `<name>.sha256` sidecar so a test can tell a rejected archive apart from
 a rejected hash.
 
+With `--kind tool` the script writes baa-tool-v1 archives instead
+(docs/TOOL_ENVIRONMENTS_V1.md): small fake tools for the named-environment
+install, conflict, rollback and removal tests.
+
     python make_sdk_fixture.py --host x86_64-windows --output-dir <dir>
+    python make_sdk_fixture.py --kind tool --host x86_64-windows --output-dir <dir>
 """
 
 from __future__ import annotations
@@ -22,6 +27,7 @@ from pathlib import Path
 
 HOSTS = ("x86_64-windows", "x86_64-linux")
 METADATA = "BAA-SDK.json"
+TOOL_METADATA = "BAA-TOOL.json"
 
 
 def is_executable(path: str) -> bool:
@@ -110,8 +116,8 @@ def tar_entry(name: str, data: bytes, mode: int, **header) -> bytes:
 
 
 def tar_bytes(top: str, metadata: bytes, files: dict[str, bytes],
-              entries: list[dict]) -> list[bytes]:
-    parts = [tar_entry(f"{top}/{METADATA}", metadata, 0o644)]
+              entries: list[dict], metadata_name: str = METADATA) -> list[bytes]:
+    parts = [tar_entry(f"{top}/{metadata_name}", metadata, 0o644)]
     for entry in entries:
         mode = 0o755 if entry["executable"] else 0o644
         parts.append(tar_entry(f"{top}/{entry['path']}", files[entry["path"]], mode))
@@ -151,8 +157,74 @@ def valid_parts(version: str, host: str):
     return top, files, entries, canonical_metadata(version, host, entries)
 
 
+def tool_metadata(name: str, version: str, host: str, entries: list[dict]) -> bytes:
+    head = {
+        "schema_version": "baa-tool-v1",
+        "name": name,
+        "version": version,
+        "host": host,
+    }
+    text = json.dumps(head, ensure_ascii=False, indent=2)
+    lines = ["    " + json.dumps(entry, ensure_ascii=False) for entry in entries]
+    return (text[:-2] + ',\n  "files": [\n' + ",\n".join(lines) + "\n  ]\n}\n").encode()
+
+
+def tool_archive(name: str, version: str, host: str, files: dict[str, bytes],
+                 top_name: str | None = None) -> bytes:
+    entries = inventory(files)
+    top = f"baa-tool-{top_name or name}-{version}-{host}"
+    metadata = tool_metadata(name, version, host, entries)
+    payload = b"".join(tar_bytes(top, metadata, files, entries, TOOL_METADATA)) + end_blocks()
+    return gzip_bytes(payload)
+
+
+def write_tools(out: Path, host: str) -> None:
+    """Fake tools. Archive file names stay ASCII; tool names are Arabic."""
+    exe = ".exe" if host == "x86_64-windows" else ""
+    hello = {
+        f"bin/مرحبا{exe}": b"fake hello 1.0.0\n",
+        "share/مرحبا/اقرأني.txt": "أداة تجريبية\n".encode(),
+        "share/مرحبا/فارغ.txt": b"",
+    }
+    write(out, "tool-hello-1.0.0.tar.gz", tool_archive("مرحبا", "1.0.0", host, hello))
+    newer = dict(hello)
+    newer[f"bin/مرحبا{exe}"] = b"fake hello 1.1.0\n"
+    write(out, "tool-hello-1.1.0.tar.gz", tool_archive("مرحبا", "1.1.0", host, newer))
+    # Owns bin/مرحبا too: preflight must refuse it while مرحبا is installed.
+    write(out, "tool-clash-1.0.0.tar.gz", tool_archive("متعارض", "1.0.0", host, {
+        f"bin/مرحبا{exe}": b"fake clash\n",
+        "share/متعارض/x.txt": b"clash\n",
+    }))
+    # bin/أ.txt sorts first and moves; bin/عائق/ملف.txt fails when bin/عائق is a file.
+    write(out, "tool-blocked-1.0.0.tar.gz", tool_archive("معطوب", "1.0.0", host, {
+        "bin/أ.txt": b"first\n",
+        "bin/عائق/ملف.txt": b"second\n",
+    }))
+    # Shares its name with a project dependency and ships a fake baa: a build must
+    # not see either while the environment is on PATH.
+    write(out, "tool-library-1.0.0.tar.gz", tool_archive("مكتبة", "1.0.0", host, {
+        f"bin/baa{exe}": b"not a compiler\n",
+        f"bin/مكتبة{exe}": b"fake library tool\n",
+    }))
+    write(out, "bad-tool-latin-name.tar.gz", tool_archive("hello", "1.0.0", host, {
+        f"bin/hello{exe}": b"x\n",
+    }))
+    write(out, "bad-tool-internal-path.tar.gz", tool_archive("داخلي", "1.0.0", host, {
+        ".تكوين-بيئة/قاعدة": b"x\n",
+    }))
+    write(out, "bad-tool-top-mismatch.tar.gz", tool_archive("مرحبا", "1.0.0", host, hello,
+                                                            top_name="اخرى"))
+    other = HOSTS[1] if host == HOSTS[0] else HOSTS[0]
+    write(out, "bad-tool-other-host.tar.gz", tool_archive("مرحبا", "1.0.0", other, hello))
+    # An SDK archive is not a tool archive.
+    top, files, entries, metadata = valid_parts("0.6.0", host)
+    payload = b"".join(tar_bytes(top, metadata, files, entries)) + end_blocks()
+    write(out, "bad-tool-sdk-archive.tar.gz", gzip_bytes(payload))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--kind", choices=("sdk", "tool"), default="sdk")
     parser.add_argument("--host", required=True, choices=HOSTS)
     parser.add_argument("--output-dir", required=True, type=Path)
     args = parser.parse_args()
@@ -160,6 +232,9 @@ def main() -> int:
     other = HOSTS[1] if host == HOSTS[0] else HOSTS[0]
     out = args.output_dir
     out.mkdir(parents=True, exist_ok=True)
+    if args.kind == "tool":
+        write_tools(out, host)
+        return 0
 
     # Valid archives: one per deflate block kind.
     for version, mode in (("0.6.0", "dynamic"), ("0.7.0", "fixed"), ("0.8.0", "stored")):

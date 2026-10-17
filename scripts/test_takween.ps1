@@ -2189,6 +2189,232 @@ $Extra
         } finally {
             $env:PATH = $savedPath
         }
+
+        # Tool store and named environments: transactional install and removal, file
+        # ownership, conflict preflight, rollback, crash recovery, and isolation of
+        # locked projects from whatever environment is on PATH.
+        $toolFixtures = Join-Path $tempRoot 'أرشيفات الأدوات'
+        & $python -I -X utf8 (Join-Path $PSScriptRoot 'make_sdk_fixture.py') `
+            --kind tool --host $targetInfo.host_target --output-dir $toolFixtures
+        if ($LASTEXITCODE -ne 0) { throw 'Tool fixture generation failed.' }
+        $tool = { param([string]$Name) Join-Path $toolFixtures $Name }
+        $toolsRoot = Join-Path $env:TAKWEEN_DATA_HOME 'أدوات'
+        $defaultEnv = Join-Path $toolsRoot 'بيئات/افتراضية'
+        $toolStore = Join-Path $toolsRoot 'مخزن'
+        $helloBin = "bin/مرحبا$hostSuffix"
+        $envTree = {
+            param([string]$Root)
+            $full = (Resolve-Path -LiteralPath $Root).ProviderPath
+            [string[]]$files = @(Get-ChildItem -Force -Recurse -File -LiteralPath $full | ForEach-Object {
+                    $_.FullName.Substring($full.Length + 1).Replace('\', '/')
+                })
+            [Array]::Sort($files, [StringComparer]::Ordinal)
+            $files -join ','
+        }
+        $toolNames = {
+            param([string[]]$Extra)
+            $listing = Invoke-ExpectedSuccess $takween (@('أداة', 'قائمة', '--جسون') + @($Extra | Where-Object { $_ })) 'tool list' |
+                ConvertFrom-Json
+            if ($listing.schema_version -ne 'takween-tool-list-v1') { throw 'Tool list is not takween-tool-list-v1.' }
+            @($listing.tools | ForEach-Object { $_.name }) -join ','
+        }
+
+        $emptyTools = Invoke-ExpectedSuccess $takween @('tool', 'list', '--json') 'empty tool list' | ConvertFrom-Json
+        if ($emptyTools.environment -ne 'افتراضية' -or @($emptyTools.tools).Count -ne 0 -or
+            $emptyTools.path -ne $defaultEnv.Replace('\', '/')) {
+            throw 'The default environment did not list as empty before its first install.'
+        }
+        $noEnvs = Invoke-ExpectedSuccess $takween @('بيئة', 'قائمة', '--جسون') 'empty environment list' |
+            ConvertFrom-Json
+        if ($noEnvs.schema_version -ne 'takween-env-list-v1' -or @($noEnvs.environments).Count -ne 0) {
+            throw 'An empty tool root listed environments.'
+        }
+
+        $installEvents = Join-Path $tempRoot 'أحداث تثبيت الأداة.jsonl'
+        $installed = Invoke-ExpectedSuccess $takween @('أداة', 'ثبت', (& $tool 'tool-hello-1.0.0.tar.gz'),
+            '--ملف_أحداث', $installEvents) 'tool install'
+        if (-not $installed.Contains('مرحبا 1.0.0')) { throw "Tool install printed: $installed" }
+        $events = @(Get-Content -Encoding utf8 -LiteralPath $installEvents | ForEach-Object { $_ | ConvertFrom-Json })
+        $phases = @($events | Where-Object { $_.event -eq 'phase_finished' } | ForEach-Object { $_.phase }) -join ','
+        if ($events[0].event -ne 'operation_started' -or $events[0].operation -ne 'tool_install' -or
+            $events[-1].event -ne 'operation_finished' -or $events[-1].exit_code -ne 0 -or
+            $phases -ne 'verify_archive,store,preflight,stage,commit,database' -or
+            @($events | Where-Object { $_.event -eq 'package_finished' -and $_.package -eq 'مرحبا' }).Count -ne 1) {
+            throw "Tool install events are incomplete: $phases"
+        }
+        $helloTree = 'bin/مرحبا' + $hostSuffix + ',share/مرحبا/اقرأني.txt,share/مرحبا/فارغ.txt'
+        if ((& $envTree $defaultEnv) -ne ".تكوين-بيئة/قاعدة,$helloTree") {
+            throw "The installed environment holds: $(& $envTree $defaultEnv)"
+        }
+        $reinstall = Invoke-ExpectedSuccess $takween @('tool', 'install', (& $tool 'tool-hello-1.0.0.tar.gz')) `
+            'idempotent tool reinstall'
+        if (-not $reinstall.Contains('مسبقا')) { throw "A tool reinstall printed: $reinstall" }
+        Invoke-ExpectedExitCode $takween @('أداة', 'ثبت', (& $tool 'tool-hello-1.1.0.tar.gz')) 1 `
+            'tool install over another archive' | Out-Null
+
+        # Preflight conflicts change nothing; a failed move rolls back what it placed.
+        $before = & $envTree $defaultEnv
+        $clash = Invoke-ExpectedExitCode $takween @('أداة', 'ثبت', (& $tool 'tool-clash-1.0.0.tar.gz')) 1 `
+            'conflicting tool install'
+        if (-not $clash.Contains('تعارض') -or (& $envTree $defaultEnv) -ne $before) {
+            throw "A conflicting tool install changed the environment.`n$clash"
+        }
+        $blocker = Join-Path $defaultEnv 'bin/عائق'
+        [IO.File]::WriteAllText($blocker, 'unowned', $utf8NoBom)
+        $blockedBefore = & $envTree $defaultEnv
+        Invoke-ExpectedExitCode $takween @('أداة', 'ثبت', (& $tool 'tool-blocked-1.0.0.tar.gz')) 1 `
+            'tool install rolled back' | Out-Null
+        if ((& $envTree $defaultEnv) -ne $blockedBefore -or (& $toolNames @()) -ne 'مرحبا') {
+            throw "A rolled-back tool install left: $(& $envTree $defaultEnv)"
+        }
+        Remove-Item -LiteralPath $blocker
+        Invoke-ExpectedExitCode $takween @('أداة', 'ثبت', (& $tool 'tool-hello-1.0.0.tar.gz'), '--تجزئة', ('0' * 64)) 1 `
+            'tool install with a mismatched hash' | Out-Null
+        Invoke-ExpectedExitCode $takween @('أداة', 'ثبت', (& $tool 'tool-hello-1.0.0.tar.gz'), '--تجزئة', 'abc') 2 `
+            'tool install with a malformed hash' | Out-Null
+        $badTools = @(Get-ChildItem -LiteralPath $toolFixtures -File -Filter 'bad-tool-*.tar.gz')
+        if ($badTools.Count -lt 5) { throw "Only $($badTools.Count) malformed tool archives were generated." }
+        foreach ($archive in $badTools) {
+            Invoke-ExpectedExitCode $takween @('أداة', 'ثبت', $archive.FullName) 1 `
+                "malformed tool archive $($archive.Name)" | Out-Null
+        }
+        if ((& $envTree $defaultEnv) -ne $before -or (Test-Path -LiteralPath (Join-Path $toolStore '.مؤقت'))) {
+            throw 'Rejected tool archives changed the environment or left store staging behind.'
+        }
+
+        $owner = Invoke-ExpectedSuccess $takween @('أداة', 'مالك', $helloBin.Replace('/', '\'), '--جسون') 'tool owner' |
+            ConvertFrom-Json
+        if ($owner.schema_version -ne 'takween-tool-owner-v1' -or $owner.owner -ne 'مرحبا' -or $owner.path -ne $helloBin) {
+            throw 'tool owner did not report the owning tool.'
+        }
+        $unowned = Invoke-ExpectedExitCode $takween @('tool', 'owner', 'bin/لا_شيء', '--json') 1 'unowned path' |
+            ConvertFrom-Json
+        if ($null -ne $unowned.owner) { throw 'An unowned path reported an owner.' }
+        Invoke-ExpectedExitCode $takween @('أداة', 'مالك', '../خارج') 2 'owner of an escaping path' | Out-Null
+
+        # A crash after files move and before the database commits is undone by the
+        # next locked operation; a crash in removal puts the files back.
+        $env:TAKWEEN_TEST_FAULT = 'install-after-move'
+        try {
+            Invoke-ExpectedExitCode $takween @('أداة', 'ثبت', (& $tool 'tool-library-1.0.0.tar.gz')) 1 `
+                'interrupted tool install' | Out-Null
+        } finally {
+            Remove-Item Env:TAKWEEN_TEST_FAULT
+        }
+        if (-not (Test-Path -LiteralPath (Join-Path $defaultEnv "bin/مكتبة$hostSuffix")) -or
+            (& $toolNames @()) -ne 'مرحبا') {
+            throw 'The interrupted install did not stop between moving files and committing.'
+        }
+        Remove-Item -Force -LiteralPath (Join-Path $toolsRoot '.قفل')
+        $recovered = Invoke-ExpectedSuccess $takween @('أداة', 'ثبت', (& $tool 'tool-library-1.0.0.tar.gz')) `
+            'tool install after an interrupted one'
+        if (-not $recovered.Contains('تراجع تكوين عن تثبيت منقطع') -or (& $toolNames @()) -ne 'مرحبا,مكتبة') {
+            throw "Recovery from an interrupted install printed: $recovered"
+        }
+        $withLibrary = & $envTree $defaultEnv
+        $env:TAKWEEN_TEST_FAULT = 'remove-after-move'
+        try {
+            Invoke-ExpectedExitCode $takween @('أداة', 'احذف', 'مكتبة') 1 'interrupted tool remove' | Out-Null
+        } finally {
+            Remove-Item Env:TAKWEEN_TEST_FAULT
+        }
+        if (Test-Path -LiteralPath (Join-Path $defaultEnv "bin/مكتبة$hostSuffix")) {
+            throw 'The interrupted remove did not move the files out.'
+        }
+        Remove-Item -Force -LiteralPath (Join-Path $toolsRoot '.قفل')
+        $restored = Invoke-ExpectedSuccess $takween @('أداة', 'ثبت', (& $tool 'tool-library-1.0.0.tar.gz')) `
+            'tool install after an interrupted remove'
+        if (-not $restored.Contains('تراجع تكوين عن حذف منقطع') -or (& $envTree $defaultEnv) -ne $withLibrary) {
+            throw "Recovery from an interrupted remove printed: $restored"
+        }
+
+        [IO.File]::WriteAllText((Join-Path $toolsRoot '.قفل'), 'held', $utf8NoBom)
+        $held = Invoke-ExpectedExitCode $takween @('أداة', 'احذف', 'مرحبا') 1 'tool remove under a held lock'
+        if (-not $held.Contains('.قفل') -or (& $toolNames @()) -ne 'مرحبا,مكتبة') {
+            throw 'A held tool lock did not stop removal.'
+        }
+        Remove-Item -Force -LiteralPath (Join-Path $toolsRoot '.قفل')
+
+        # Locked projects keep their pinned SDK and dependency with the environment on PATH,
+        # even though it holds a baa and a tool named after a dependency.
+        $env:PATH = "$(Join-Path $defaultEnv 'bin')$([IO.Path]::PathSeparator)$savedPath"
+        try {
+            foreach ($project in $sdkProjects) {
+                Push-Location $project.Root
+                try {
+                    Invoke-ExpectedSuccess $takween @('تنظيف') "tool-isolated $($project.Name) clean" | Out-Null
+                    $isolatedRun = Invoke-ExpectedSuccess $takween @('تشغيل', '--مقفل') `
+                        "tool-isolated $($project.Name) locked run"
+                    $isolatedPlan = Invoke-ExpectedSuccess $takween @('خطة', '--جسون', '--مقفل') `
+                        "tool-isolated $($project.Name) locked plan"
+                    if (-not $isolatedRun.Contains("مشروع $($project.Name)") -or $isolatedPlan -ne $project.Plan -or
+                        [IO.File]::ReadAllText((Join-Path $project.Root 'تكوين.قفل')) -ne $project.Lock) {
+                        throw "A tool environment on PATH changed the locked build of $($project.Name)."
+                    }
+                } finally {
+                    Pop-Location
+                }
+            }
+        } finally {
+            $env:PATH = $savedPath
+        }
+
+        $removeEvents = Join-Path $tempRoot 'أحداث حذف الأداة.jsonl'
+        Invoke-ExpectedSuccess $takween @('tool', 'remove', 'مكتبة', '--events-file', $removeEvents) 'tool remove' |
+            Out-Null
+        $events = @(Get-Content -Encoding utf8 -LiteralPath $removeEvents | ForEach-Object { $_ | ConvertFrom-Json })
+        $phases = @($events | Where-Object { $_.event -eq 'phase_finished' } | ForEach-Object { $_.phase }) -join ','
+        if ($events[0].operation -ne 'tool_remove' -or $phases -ne 'preflight,commit,database' -or
+            $events[-1].exit_code -ne 0) {
+            throw "Tool remove events are incomplete: $phases"
+        }
+        if ((& $envTree $defaultEnv) -ne $before) { throw 'Removing a tool left or took other files.' }
+        Invoke-ExpectedExitCode $takween @('أداة', 'احذف', 'مكتبة') 1 'tool remove twice' | Out-Null
+
+        # A file changed after install stays, unowned; the rest goes.
+        $readme = Join-Path $defaultEnv 'share/مرحبا/اقرأني.txt'
+        [IO.File]::WriteAllText($readme, 'edited', $utf8NoBom)
+        $kept = Invoke-ExpectedSuccess $takween @('أداة', 'احذف', 'مرحبا') 'tool remove with an edited file'
+        if (-not $kept.Contains('[تحذير]') -or (& $envTree $defaultEnv) -ne '.تكوين-بيئة/قاعدة,share/مرحبا/اقرأني.txt' -or
+            (& $toolNames @()) -ne '') {
+            throw "Removing a tool with an edited file left: $(& $envTree $defaultEnv)"
+        }
+        Invoke-ExpectedExitCode $takween @('أداة', 'مالك', 'share/مرحبا/اقرأني.txt') 1 'owner of a kept file' | Out-Null
+        Remove-Item -LiteralPath $readme
+
+        # Named environments.
+        Invoke-ExpectedSuccess $takween @('بيئة', 'أنشئ', 'تجربة') 'environment create' | Out-Null
+        Invoke-ExpectedSuccess $takween @('env', 'create', 'تجربة') 'environment create twice' | Out-Null
+        $namedEnv = Join-Path $toolsRoot 'بيئات/تجربة'
+        if ((Invoke-ExpectedSuccess $takween @('بيئة', 'مسار', 'تجربة') 'environment path').Trim() -ne
+            $namedEnv.Replace('\', '/')) {
+            throw 'environment path printed the wrong directory.'
+        }
+        Invoke-ExpectedSuccess $takween @('أداة', 'ثبت', (& $tool 'tool-library-1.0.0.tar.gz'), '--بيئة', 'تجربة') `
+            'tool install into a named environment' | Out-Null
+        Invoke-ExpectedSuccess $takween @('أداة', 'ثبت', (& $tool 'tool-hello-1.0.0.tar.gz')) `
+            'tool install from the store' | Out-Null
+        if ((& $toolNames @('--بيئة', 'تجربة')) -ne 'مكتبة' -or (& $toolNames @()) -ne 'مرحبا') {
+            throw 'Environments do not keep their tools apart.'
+        }
+        $envs = Invoke-ExpectedSuccess $takween @('env', 'list', '--json') 'environment list' | ConvertFrom-Json
+        $envSummary = @($envs.environments | ForEach-Object { "$($_.name):$($_.tools)" }) -join ','
+        if ($envSummary -ne 'افتراضية:1,تجربة:1' -or $envs.tools_root -ne $toolsRoot.Replace('\', '/')) {
+            throw "environment list printed '$envSummary'."
+        }
+        Invoke-ExpectedExitCode $takween @('بيئة', 'احذف', 'تجربة') 1 'remove an environment with tools' | Out-Null
+        Invoke-ExpectedSuccess $takween @('أداة', 'احذف', 'مكتبة', '--env', 'تجربة') 'tool remove from a named environment' |
+            Out-Null
+        Invoke-ExpectedSuccess $takween @('بيئة', 'احذف', 'تجربة') 'environment remove' | Out-Null
+        if (Test-Path -LiteralPath $namedEnv) { throw 'Environment removal left its directory.' }
+        Invoke-ExpectedExitCode $takween @('بيئة', 'مسار', 'تجربة') 1 'removed environment path' | Out-Null
+        Invoke-ExpectedExitCode $takween @('أداة', 'ثبت', (& $tool 'tool-hello-1.0.0.tar.gz'), '--بيئة', 'غائبة') 1 `
+            'tool install into a missing environment' | Out-Null
+        Invoke-ExpectedExitCode $takween @('بيئة', 'أنشئ', 'hello') 2 'non-Arabic environment name' | Out-Null
+        Invoke-ExpectedExitCode $takween @('أداة') 2 'tool command without a subcommand' | Out-Null
+        Invoke-ExpectedExitCode $takween @('أداة', 'اطبخ') 2 'unknown tool subcommand' | Out-Null
+        Invoke-ExpectedExitCode $takween @('أداة', 'ثبت') 2 'tool install without an archive' | Out-Null
+        Invoke-ExpectedExitCode $takween @('بيئة', 'قائمة', 'زائد') 2 'environment list with an argument' | Out-Null
     } finally {
         Pop-Location
         $env:TAKWEEN_DATA_HOME = $oldDataHome

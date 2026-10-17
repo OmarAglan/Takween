@@ -12,6 +12,8 @@
 تكوين تشغيل --ملف_أحداث <مسار>
 تكوين اختبار --ملف_أحداث <مسار>
 تكوين تنظيف --ملف_أحداث <مسار>
+تكوين أداة ثبت <أرشيف> --ملف_أحداث <مسار>
+تكوين أداة احذف <اسم> --ملف_أحداث <مسار>
 ```
 
 - `--events-file` alias توافق آلي فقط؛ الصيغة القياسية `--ملف_أحداث`.
@@ -31,7 +33,7 @@
 | `schema_version` | string | ثابت: `takween-build-events-v1` |
 | `sequence` | integer | يبدأ من `1` ويزداد واحدا داخل العملية |
 | `event` | string | نوع الحدث |
-| `operation` | string | `build`, `check`, `run`, `test`, أو `clean` |
+| `operation` | string | `build`, `check`, `run`, `test`, `clean`, `tool_install`, أو `tool_remove` |
 
 الحقول الشرطية:
 
@@ -39,7 +41,7 @@
 - `phase`: اسم المرحلة المستقر آليا.
 - `exit_code`: عدد صحيح في أحداث النهاية.
 - `target`: اسم الهدف في أحداث الاختبار.
-- `package`: اسم حزمة مساحة العمل.
+- `package`: اسم حزمة مساحة العمل، أو اسم الأداة في `tool_install/tool_remove`.
 - `artifact`: كائن يحوي `kind` و`path` عند إنتاج أثر.
 
 مثال:
@@ -68,6 +70,9 @@
 
 أسماء المراحل الحالية تشمل `plan`, `prepare_output`, `compiler`,
 `compiler_check`, `cache_receipt`, `build`, `program`, و`clean_output`.
+مراحل الأدوات: `verify_archive`, `store`, `preflight`, `stage`, `commit`,
+و`database` (`tool_install`)، و`preflight`, `commit`, `database` (`tool_remove`)؛
+انظر [`TOOL_ENVIRONMENTS_V1.md`](TOOL_ENVIRONMENTS_V1.md).
 لا يستنتج المستهلك النجاح من اسم المرحلة؛ يعتمد `status` و`exit_code`.
 
 ## الترتيب والنهاية
