@@ -1204,6 +1204,9 @@ try {
     }
 
     # Official libraries are ordinary packages: pack them into a local index, then add, lock and build.
+    # They include baalib, so they compile against the stdlib of the compiler under test.
+    $oldBaaStdlib = $env:BAA_STDLIB
+    $env:BAA_STDLIB = $baaStdlib
     $officialRoot = Join-Path $tempRoot 'مكتبات رسمية'
     $officialIndexDir = Join-Path $officialRoot 'فهرس'
     $officialIndex = Join-Path $officialIndexDir 'index.tsv'
@@ -1366,6 +1369,7 @@ try {
     } finally {
         Pop-Location
         $env:TAKWEEN_PACKAGE_INDEX = $oldPackageIndex
+        $env:BAA_STDLIB = $oldBaaStdlib
     }
 
     $gitProgram = (Get-Command git -ErrorAction Stop).Source

@@ -81,6 +81,7 @@ jobs:
         run: |
           $sep = [IO.Path]::PathSeparator
           $env:PATH = "$env:GITHUB_WORKSPACE/Baa/build-eco$sep$env:GITHUB_WORKSPACE/Nazm/build-eco$sep$env:PATH"
+          $env:BAA_STDLIB = "$env:GITHUB_WORKSPACE/Baa/stdlib"
           ./Takween/scripts/pack_official_libraries.ps1
           Get-Content -LiteralPath "Takween/dist/حزم/index.tsv"
 
