@@ -1,0 +1,2 @@
+# Official libraries are packed byte-for-byte; LF keeps archive digests identical on every OS.
+مكتبات/** text eol=lf

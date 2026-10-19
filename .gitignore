@@ -2,6 +2,9 @@
 بناء/
 المخرجات/
 build/
+
+# Official library locks are per-host; packages ship without them
+مكتبات/*/تكوين.قفل
 *.exe
 *.o
 *.s

@@ -1203,6 +1203,171 @@ try {
         $env:TAKWEEN_PACKAGE_INDEX = $oldPackageIndex
     }
 
+    # Official libraries are ordinary packages: pack them into a local index, then add, lock and build.
+    $officialRoot = Join-Path $tempRoot 'مكتبات رسمية'
+    $officialIndexDir = Join-Path $officialRoot 'فهرس'
+    $officialIndex = Join-Path $officialIndexDir 'index.tsv'
+    New-Item -ItemType Directory -Force $officialIndexDir | Out-Null
+    $officialDigests = @{}
+    foreach ($library in @('نصوص', 'اختبار')) {
+        $librarySource = Join-Path $officialRoot $library
+        Copy-Item -Recurse -LiteralPath (Join-Path $root "مكتبات/$library") -Destination $librarySource
+        Push-Location $librarySource
+        try {
+            Invoke-ExpectedSuccess $takween @('test') "official library $library tests" | Out-Null
+            Invoke-ExpectedExitCode $takween @('حزّم', '--فهرس', '../فهرس/index.tsv') 2 `
+                "pack $library into a parent-relative index" | Out-Null
+            $packed = Invoke-ExpectedSuccess $takween @('حزّم', '--فهرس', $officialIndex) "pack $library"
+            $packedDigest = [regex]::Match($packed, 'sha256 ([0-9a-f]{64})')
+            if (-not $packedDigest.Success -or $packed -notmatch 'سُجل في الفهرس') {
+                throw "Pack did not report the archive digest and index registration.`n$packed"
+            }
+            $officialDigests[$library] = $packedDigest.Groups[1].Value
+            $packed = Invoke-ExpectedSuccess $takween @('pack', '--index', $officialIndex) "repack $library"
+            if ($packed -notmatch 'مسجل مسبقا' -or -not $packed.Contains("sha256 $($officialDigests[$library])")) {
+                throw "Repacking an unchanged library was not reproducible.`n$packed"
+            }
+            $standalone = Invoke-ExpectedSuccess $takween @('pack') "pack $library without an index"
+            $standaloneArchive = Join-Path $librarySource "بناء/حزم/باء-$library-1.0.0.tkw"
+            if (-not $standalone.Contains("باء/$library`t1.0.0`t$($officialDigests[$library])`t") -or
+                (Get-FileHash -Algorithm SHA256 -LiteralPath $standaloneArchive).Hash.ToLowerInvariant() -ne
+                    $officialDigests[$library]) {
+                throw "Pack without an index did not write the same archive under the build directory.`n$standalone"
+            }
+        } finally {
+            Pop-Location
+        }
+    }
+    $expectedOfficialIndex = @(
+        'takween-index-v1',
+        "باء/نصوص`t1.0.0`t$($officialDigests['نصوص'])`tباء-نصوص-1.0.0.tkw",
+        "باء/اختبار`t1.0.0`t$($officialDigests['اختبار'])`tباء-اختبار-1.0.0.tkw"
+    ) -join "`n"
+    if ([IO.File]::ReadAllText($officialIndex).TrimEnd() -cne $expectedOfficialIndex) {
+        throw "Pack did not write index rows relative to the index directory.`n$([IO.File]::ReadAllText($officialIndex))"
+    }
+    $officialArchive = Join-Path $officialIndexDir 'باء-نصوص-1.0.0.tkw'
+    $archiveText = [IO.File]::ReadAllText($officialArchive)
+    if (-not $archiveText.StartsWith("takween-archive-v1`n") -or
+        $archiveText.IndexOf("ملف`tتضمين/باء_نصوص.baahd`t") -gt $archiveText.IndexOf("ملف`tمشروع.تكوين`t") -or
+        $archiveText.IndexOf("ملف`tمشروع.تكوين`t") -gt $archiveText.IndexOf("ملف`tمصدر/نصوص.baa`t") -or
+        $archiveText -notmatch "`nنهاية`t3`t\d+`n$" -or $archiveText.Contains("ملف`tاختبارات/")) {
+        throw 'The packed archive is not a sorted takween-archive-v1 of exactly the listed files.'
+    }
+
+    # A published version is immutable: changed bytes under the same version are rejected untouched.
+    $changedLibrary = Join-Path $officialRoot 'نصوص'
+    $changedHeader = Join-Path $changedLibrary 'تضمين/باء_نصوص.baahd'
+    $originalHeader = [IO.File]::ReadAllBytes($changedHeader)
+    [IO.File]::AppendAllText($changedHeader, "// تغيير`n", $utf8NoBom)
+    Push-Location $changedLibrary
+    try {
+        $changedPack = Invoke-ExpectedFailure $takween @('حزّم', '--فهرس', $officialIndex) 'repack changed bytes'
+        if ($changedPack -notmatch 'ارفع رقم الإصدار' -or
+            (Get-FileHash -Algorithm SHA256 -LiteralPath $officialArchive).Hash.ToLowerInvariant() -ne
+                $officialDigests['نصوص'] -or
+            [IO.File]::ReadAllText($officialIndex).TrimEnd() -cne $expectedOfficialIndex) {
+            throw "Repacking changed bytes as the same version was not rejected without changes.`n$changedPack"
+        }
+    } finally {
+        Pop-Location
+        [IO.File]::WriteAllBytes($changedHeader, $originalHeader)
+    }
+
+    $badPack = Join-Path $officialRoot 'حزمة_غير_آمنة'
+    New-Item -ItemType Directory -Force $badPack | Out-Null
+    $badManifest = @'
+[المشروع]
+الاسم = "غير_آمنة"
+الإصدار = "1.0.0"
+إصدار_باء = ">=0.6.0"
+
+[الأهداف.غير_آمنة]
+النوع = "مكتبة"
+المدخل = "مصدر/غير_آمنة.baa"
+
+[البناء]
+المخرج = "build"
+'@
+    [IO.File]::WriteAllText((Join-Path $badPack 'مشروع.تكوين'), $badManifest, $utf8NoBom)
+    Push-Location $badPack
+    try {
+        $noSection = Invoke-ExpectedFailure $takween @('حزّم') 'pack without a package section'
+        if ($noSection -notmatch '\[الحزمة\]') {
+            throw "Pack without [الحزمة] did not name the section.`n$noSection"
+        }
+        [IO.File]::WriteAllText((Join-Path $badPack 'مشروع.تكوين'),
+            $badManifest + "`n[الحزمة]`nالملفات = [`"../خارج.baa`"]`n", $utf8NoBom)
+        $unsafe = Invoke-ExpectedFailure $takween @('حزّم') 'pack an unsafe path'
+        if ($unsafe -notmatch 'مسار غير آمن') {
+            throw "Pack accepted a path outside the package.`n$unsafe"
+        }
+        [IO.File]::WriteAllText((Join-Path $badPack 'مشروع.تكوين'),
+            $badManifest + "`n[الحزمة]`nالملفات = [`"مشروع.تكوين`"]`n", $utf8NoBom)
+        Invoke-ExpectedFailure $takween @('حزّم') 'pack listing the manifest explicitly' | Out-Null
+    } finally {
+        Pop-Location
+    }
+
+    # The index directory is portable: archive rows resolve against wherever the index now lives.
+    $movedIndexDir = Join-Path $tempRoot 'فهرس منقول'
+    Copy-Item -Recurse -LiteralPath $officialIndexDir -Destination $movedIndexDir
+    $officialConsumer = Join-Path $tempRoot 'مستهلك_رسمي'
+    New-Item -ItemType Directory -Force (Join-Path $officialConsumer 'مصدر') | Out-Null
+    [IO.File]::WriteAllText((Join-Path $officialConsumer 'مشروع.تكوين'), @'
+[المشروع]
+الاسم = "مستهلك_رسمي"
+الإصدار = "0.1.0"
+إصدار_باء = ">=0.6.0"
+
+[الأهداف.مستهلك_رسمي]
+النوع = "تنفيذي"
+المدخل = "مصدر/الرئيسية.baa"
+
+[البناء]
+المخرج = "build"
+'@, $utf8NoBom)
+    [IO.File]::WriteAllText((Join-Path $officialConsumer 'مصدر/الرئيسية.baa'), @'
+#تضمين "baalib.baahd"
+#تضمين "باء_نصوص.baahd"
+#تضمين "باء_اختبار.baahd"
+
+صحيح الرئيسية() {
+    متجه أجزاء = قسم_نص("باء،تكوين،نظم"، "،").
+    تحقق_يساوي_صحيح(عدد_أجزاء_نص(أجزاء)، ٣، "القسم").
+    نص مضموم = اجمع_نصوص(أجزاء، " + ").
+    تحقق_يساوي_نص(مضموم، "باء + تكوين + نظم"، "الضم").
+    حرر_نص(مضموم).
+    حرر_أجزاء_نص(أجزاء).
+    إرجع أنه_الاختبارات().
+}
+'@, $utf8NoBom)
+    $oldPackageIndex = $env:TAKWEEN_PACKAGE_INDEX
+    $env:TAKWEEN_PACKAGE_INDEX = Join-Path $movedIndexDir 'index.tsv'
+    Push-Location $officialConsumer
+    try {
+        Invoke-ExpectedSuccess $takween @('أضف', 'باء/نصوص') 'add the official strings package' | Out-Null
+        Invoke-ExpectedSuccess $takween @('add', 'باء/اختبار') 'add the official testing package' | Out-Null
+        $officialRun = Invoke-ExpectedSuccess $takween @('run') 'run against official packages'
+        if ($officialRun -notmatch 'نجح 2 من 2') {
+            throw "The official packages were not built and linked.`n$officialRun"
+        }
+        Invoke-ExpectedSuccess $takween @('build', '--locked') 'locked build against official packages' | Out-Null
+        $officialLock = Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $officialConsumer 'تكوين.قفل') |
+            ConvertFrom-Json
+        foreach ($library in @('نصوص', 'اختبار')) {
+            $node = @($officialLock.packages | Where-Object { $_.alias -eq $library })[0]
+            if (-not $node -or $node.name -ne "باء/$library" -or $node.version -ne '1.0.0' -or
+                $node.source.kind -ne 'archive' -or $node.source.sha256 -ne $officialDigests[$library] -or
+                -not $node.source.archive.Replace('\', '/').StartsWith($movedIndexDir.Replace('\', '/'))) {
+                throw "The lock does not pin باء/$library to its packed archive in the moved index."
+            }
+        }
+    } finally {
+        Pop-Location
+        $env:TAKWEEN_PACKAGE_INDEX = $oldPackageIndex
+    }
+
     $gitProgram = (Get-Command git -ErrorAction Stop).Source
     $gitPackageRoot = Join-Path $tempRoot 'git-package-source'
     New-Item -ItemType Directory -Force $gitPackageRoot | Out-Null

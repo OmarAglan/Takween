@@ -76,6 +76,21 @@ jobs:
           $nazm = Join-Path $env:GITHUB_WORKSPACE ("Nazm/build-eco/nazm" + $suffix)
           ./Takween/scripts/test_takween.ps1 -BaaPath $baa -NazmPath $nazm
 
+      - name: Pack the official libraries
+        shell: pwsh
+        run: |
+          $sep = [IO.Path]::PathSeparator
+          $env:PATH = "$env:GITHUB_WORKSPACE/Baa/build-eco$sep$env:GITHUB_WORKSPACE/Nazm/build-eco$sep$env:PATH"
+          ./Takween/scripts/pack_official_libraries.ps1
+          Get-Content -LiteralPath "Takween/dist/حزم/index.tsv"
+
+      - name: Upload the official packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: takween-official-packages-${{ matrix.os }}
+          path: Takween/dist/حزم/
+          if-no-files-found: error
+
   windows-installer:
     name: Standalone Windows installer
     needs: smoke
