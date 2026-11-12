@@ -35,11 +35,13 @@ SignedUninstaller=yes
 #endif
 Compression=lzma2/ultra64
 SolidCompression=yes
-WizardStyle=modern
+WizardStyle=modern dynamic windows11 hidebevels
 WizardSizePercent=110,110
 DisableWelcomePage=no
 WizardImageFile=installer\wizard-sidebar.png
+WizardImageFileDynamicDark=installer\wizard-sidebar.png
 WizardSmallImageFile=installer\wizard-mark.png
+WizardSmallImageFileDynamicDark=installer\wizard-mark.png
 WizardImageStretch=yes
 LZMANumBlockThreads=1
 CompressionThreads=1
